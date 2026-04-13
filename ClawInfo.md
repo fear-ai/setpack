@@ -418,6 +418,19 @@ Behavior summary:
 - `~/Library/Application Support/gogcli/credentials.json` duplicates the Google OAuth client data in `~/.openclaw-repo/credentials/client_secret.json`
 - `~/.config/himalaya/config.toml` is file-backed account configuration, but passwords are delegated to Keychain via `security find-generic-password ...`
 
+### 9.1 Current OpenClaw Label Examples
+
+Examples of currently observed OpenClaw auth/profile labels:
+
+- `openai-codex:default`
+- `openai-codex:codex-cli`
+- `openai:api-key`
+- `anthropic:anthropic`
+- `google:paid`
+- `google:free`
+
+These are current package-local labels from the existing OpenClaw configuration, not stable global names.
+
 ## 10. Install and Platform Findings
 
 ### 10.1 Current Local Binary Resolution
@@ -431,9 +444,15 @@ Behavior summary:
   - real target: `/opt/homebrew/Cellar/gogcli/0.12.0/bin/gog`
   - reported version: `v0.12.0 (c18c58c 2026-03-09T05:53:14Z)`
 - active `himalaya` CLI:
-  - first path on shell resolution: `~/.local/bin/himalaya`
-  - Homebrew also provides `/opt/homebrew/bin/himalaya`
-  - the user-local binary shadows the Homebrew one
+  - path: `~/.local/bin/himalaya`
+  - reported version: `v1.2.0`
+  - current build metadata reports git revision `f9bc426b8f157e4c10d8be4b8d8ff30be476e2e4`
+  - SHA-256 matches local repo build artifact: `~/Work/Claw/Emails/himalaya/target/debug/himalaya`
+- active `neverest` CLI:
+  - path: `~/.cargo/bin/neverest`
+  - reported version: `v1.0.0`
+  - current build metadata reports git revision `cc5f5214d3bea064ed059116ac81e40a803faa7e`
+  - SHA-256 matches local repo build artifact: `~/Work/Claw/Emails/neverest/target/release/neverest`
 
 ### 10.2 Current Install Channels
 
@@ -443,9 +462,8 @@ Behavior summary:
   - npm registry current `latest`: `2026.4.10`
   - npm registry current `beta`: `2026.4.11-beta.1`
 - Homebrew cask `openclaw`
-  - installed as macOS app bundle
-  - installed app version on this machine: `2026.3.7`
-  - current cask metadata advertises `2026.4.10`
+  - previously installed as macOS app bundle
+  - manually uninstalled during this session
 - Homebrew formula `openclaw-cli`
   - available
   - not installed
@@ -454,10 +472,24 @@ Behavior summary:
   - installed and active from Homebrew
   - Homebrew package version: `0.12.0`
 - `himalaya`
-  - Homebrew package installed: `1.1.0`
-  - also present as standalone user-local binary in `~/.local/bin`
+  - currently active from standalone user-local binary in `~/.local/bin`
+  - Homebrew package was previously present and is now absent
+  - current binary appears to be a copied local repo build, not a package-manager install
+- `neverest`
+  - currently active from `~/.cargo/bin/neverest`
+  - a duplicate copy had previously existed in `~/.local/bin` and is now absent
+  - `cargo install --list` records `neverest v1.0.0 (/Users/walter/Work/Claw/Emails/neverest)`
 
-### 10.3 OpenClaw macOS App Versus Local Web UI
+### 10.3 Follow-up Review Note
+
+- current evidence:
+  - `neverest` is installed via `cargo install` from local source repo `~/Work/Claw/Emails/neverest`
+  - active binary matches `~/Work/Claw/Emails/neverest/target/release/neverest`
+  - `himalaya` is not recorded in `cargo install --list`
+  - active binary matches `~/Work/Claw/Emails/himalaya/target/debug/himalaya`
+- review and document the intended rebuild/reinstall commands for both tools
+- goal: identify the authoritative source, rebuild path, and preferred controlled install method for both tools before formalizing them in Setpack
+### 10.4 OpenClaw macOS App Versus Local Web UI
 
 - Homebrew cask `openclaw` installs `OpenClaw.app`, a native macOS app bundle
 - the app bundle metadata includes:
@@ -476,7 +508,7 @@ Behavior summary:
 - the local control UI is a browser-rendered interface to a local service or gateway
 - the macOS app is the native shell with OS permissions and background app behavior
 
-### 10.4 OpenClaw Platform Availability Notes
+### 10.5 OpenClaw Platform Availability Notes
 
 Current upstream platform picture reviewed during this session:
 
@@ -490,7 +522,7 @@ Current upstream platform picture reviewed during this session:
   - OpenClaw is supported as CLI / gateway style tooling
   - no native desktop companion app is currently presented as available
 
-### 10.5 OpenClaw macOS App Architecture Notes
+### 10.6 OpenClaw macOS App Architecture Notes
 
 Current docs and installed app layout indicate a hybrid architecture:
 
@@ -498,7 +530,135 @@ Current docs and installed app layout indicate a hybrid architecture:
   - OpenClaw core and CLI-oriented logic
 - native macOS app:
   - Swift / SwiftUI build and packaging flow
-  - embedded WebChat UI inside the native app
-  - communication with the local gateway over WebSocket
+- embedded WebChat UI inside the native app
+- communication with the local gateway over WebSocket
 
 This means the macOS app is not just a generic browser tab or a trivial wrapper around the `127.0.0.1` interface.
+
+Follow-up note:
+
+- explore native-only or macOS-enhanced features separately from CLI/web setup
+- likely areas:
+  - menu bar control behavior
+  - macOS permission-backed features
+  - native speech / microphone flows
+  - native Canvas / WebChat integration
+  - automation and deep-link behavior
+
+### 10.7 User-Facing OpenClaw Environment Variables
+
+These are the user-facing `OPENCLAW_*` environment variables identified in the
+installed OpenClaw bundle and docs during this review. This list is intentionally
+limited to runtime and configuration controls, not internal test or CI-only flags.
+
+Path and profile:
+
+- `OPENCLAW_HOME`
+  - overrides the home directory OpenClaw uses for internal path resolution
+- `OPENCLAW_STATE_DIR`
+  - overrides the default state root
+- `OPENCLAW_CONFIG_PATH`
+  - overrides the config file path
+- `OPENCLAW_PROFILE`
+  - selects a named OpenClaw profile and derives state/config paths from it
+- `OPENCLAW_CONTAINER`
+  - runs the CLI against a named running container
+
+Gateway and remote connection:
+
+- `OPENCLAW_GATEWAY_URL`
+  - overrides the Gateway URL for remote connection
+- `OPENCLAW_GATEWAY_PORT`
+  - overrides the local Gateway port
+- `OPENCLAW_GATEWAY_TOKEN`
+  - supplies Gateway token authentication
+- `OPENCLAW_GATEWAY_PASSWORD`
+  - supplies Gateway password authentication
+- `OPENCLAW_HANDSHAKE_TIMEOUT_MS`
+  - overrides the pre-auth WebSocket handshake timeout
+- `OPENCLAW_ALLOW_INSECURE_PRIVATE_WS`
+  - break-glass opt-in for plaintext private-network `ws://` usage
+
+Runtime and interface:
+
+- `OPENCLAW_HIDE_BANNER`
+  - suppresses the CLI banner
+- `OPENCLAW_LOG_LEVEL`
+  - overrides the runtime log level
+- `OPENCLAW_THEME`
+  - forces light or dark terminal theme selection
+- `OPENCLAW_TTS_PREFS`
+  - overrides the path to TTS preferences
+
+Bundled roots and extensions:
+
+- `OPENCLAW_BUNDLED_SKILLS_DIR`
+  - overrides the bundled skills root
+- `OPENCLAW_BUNDLED_PLUGINS_DIR`
+  - overrides the bundled plugins root
+- `OPENCLAW_EXTENSIONS`
+  - selects bundled extensions to preinstall or enable in some deployment paths
+
+Operational note:
+
+- no separate `OPENCLAW_WORKSPACE` environment variable was identified in the current bundle or docs
+- workspace is handled by `openclaw onboard --workspace <dir>` and then persisted in config
+
+### 10.8 Current Setpacks Snapshot: `today` and `ocrepo`
+
+Current live pack state under `~/Work/Claw/Setpacks/openclaw`:
+
+- `today`
+  - OpenClaw is installed and operational from the pack-local npm bundle
+  - active config:
+    - `~/Work/Claw/Setpacks/openclaw/today/openclaw/config/openclaw.json`
+  - active state root:
+    - `~/Work/Claw/Setpacks/openclaw/today/openclaw/state`
+  - active workspace:
+    - `~/Work/Claw/Setpacks/openclaw/today/openclaw/workspace`
+  - OpenClaw wrapper now exports pack selection variables and prepends the
+    pack `bin/` directory to `PATH` before it execs the bundle
+  - this matters because OpenClaw discovers helper tools such as `gog` by
+    executable name on `PATH`
+
+- `today` Gog
+  - local bundle binary:
+    - `~/Work/Claw/Setpacks/openclaw/today/gog/bundle/bin/gog`
+  - pack wrapper:
+    - `~/Work/Claw/Setpacks/openclaw/today/bin/gog`
+  - wrapper forces:
+    - `HOME=~/Work/Claw/Setpacks/openclaw/today/gog/home`
+    - `GOG_KEYRING_BACKEND=file`
+    - synthetic Gog-native root at `~/Work/Claw/Setpacks/openclaw/today/gog/runtime/gogcli`
+  - current auth status for the pack-local Gog is:
+    - `config_exists = true`
+    - `keyring_backend = file`
+    - four OAuth accounts stored and verified
+  - currently authorized Gog accounts:
+    - `moonshotcol@gmail.com` -> `gmail,calendar,drive,contacts,docs,sheets`
+    - `alphaeosnet@gmail.com` -> `gmail,calendar,drive,contacts,docs,sheets`
+    - `wallyb33@gmail.com` -> `gmail`
+    - `tearodactylus@gmail.com` -> `gmail`
+  - real Gmail fetches were validated against all four accounts from the pack-local wrapper
+  - Gog file-keyring material is now readable across launches because the wrapper keeps a stable backend password under `gog/state/gogcli/keyring-password`
+  - remaining cleanup:
+    - export refresh tokens into pack-owned artifacts under `gog/cred/gogcli/tokens`
+    - treat the runtime keyring as disposable rebuildable state rather than the long-term credential record
+
+- older system Gog remains separately configured
+  - binary:
+    - `/opt/homebrew/bin/gog`
+  - support directory:
+    - `~/Library/Application Support/gogcli`
+  - visible files currently include:
+    - `credentials.json`
+    - `keyring/`
+    - `state/gmail-watch/`
+  - this is distinct from the `today` pack-local Gog state
+
+- `ocrepo`
+  - OpenClaw `conf`, `cred`, `state`, and `workspace` were imported from
+    `openclaw/today`
+  - `ocrepo` is import-ready, not run-ready
+  - repo build wiring and pack wrappers for `openclaw` and `gog` are still
+    missing there

@@ -19,7 +19,7 @@ The core problem is not just program versions. It is the combination of:
 
 - installable program artifacts
 - package and library dependencies
-- package-specific config
+- component-specific config
 - credentials in different formats and backends
 - persistent state
 - runtime state
@@ -31,14 +31,15 @@ Putting credentials, config, workspace, and runtime state into the same `~/.open
 
 Use a hybrid model:
 
-- one unified **instance label** for each runnable environment, such as `dev`, `prod`, or `claw_today`
-- separate **per-package parameterization** under that instance
+- one unified **set** for each deployment family, such as `openclaw`
+- one or more **packs** inside that set, such as `today`, `dev`, or `prod`
+- separate **per-component parameterization** under each pack
 
 This is the right tradeoff.
 
 Unified-only is too coarse:
 
-- it makes per-package restore and substitution awkward
+- it makes per-component restore and substitution awkward
 - it encourages one giant mutable state tree
 
 Per-package-only is too fragmented:
@@ -48,29 +49,41 @@ Per-package-only is too fragmented:
 
 The model here is:
 
-- one instance label names the deployment
-- each package under that instance has its own bundle, config set, cred set, persistent state, and runtime paths
-- the instance manifest decides which package refs are combined
+- one set names the deployment family
+- one pack names the concrete runnable deployment inside that set
+- each package under that pack has its own bundle, config set, cred set, persistent state, and runtime paths
+- the pack manifest decides which package refs are combined
 
 ## 3. Naming
 
 These terms should be used consistently.
 
-### 3.1 Instance
+### 3.1 Set
 
-A named runnable environment.
+A named deployment family that contains one or more packs.
 
 Examples:
 
+- `openclaw`
+- `clawdbot`
+
+A set groups related packs under one stable top-level name.
+
+### 3.2 Pack
+
+A concrete runnable deployment inside a set.
+
+Examples:
+
+- `today`
 - `dev`
 - `prod`
-- `claw_today`
 
-An instance is a composition of package-specific refs.
+A pack is a composition of component-specific refs.
 
-### 3.2 Package
+### 3.3 Component
 
-A distinct program managed by the stack.
+A distinct managed member inside a pack.
 
 Examples:
 
@@ -79,7 +92,7 @@ Examples:
 - `himalaya`
 - future add-ons such as `neverest`, `email-oauth2-proxy`, or a custom sidecar
 
-### 3.3 Bundle
+### 3.4 Bundle
 
 An immutable installable package artifact.
 
@@ -91,7 +104,7 @@ Examples:
 
 Bundles should describe how they were produced, but they do not need to contain every runtime utility used around them.
 
-### 3.4 Toolchain Ref
+### 3.5 Toolchain Ref
 
 A separately versioned runtime or build dependency used by one or more bundles.
 
@@ -106,7 +119,7 @@ Toolchain refs are supported, but optional.
 
 Reason:
 
-- sometimes per-instance toolchain pinning is important for reproducibility
+- sometimes per-pack toolchain pinning is important for reproducibility
 - sometimes it is unnecessary operational complexity
 - the model should support both cases without forcing either
 
@@ -182,17 +195,17 @@ Setpack should treat these as ordinary setup components:
 
 - A. system and third-party tools
   examples: `node`, `pnpm`, `python`, `rust`, `nvm`
-- B. code or binary packages
+- B. code or binary components
   examples: `openclaw`, `gogcli`, `himalaya`
-- C. per-package runtime inputs
+- C. per-component runtime inputs
   `config`, `cred`, and `state`
 
 Phase 1 assumptions:
 
-- each package owns its own `config`, `cred`, and `state`
-- default package locations such as `~/.config/...` or package-specific dotfiles are allowed
-- one package may use one primary state location even if the real package later grows multiple state roots
-- overlaps between package credential formats are noted but not reconciled automatically yet
+- each component owns its own `config`, `cred`, and `state`
+- default component locations such as `~/.config/...` or component-specific dotfiles are allowed
+- one component may use one primary state location even if the real component later grows multiple state roots
+- overlaps between component credential formats are noted but not reconciled automatically yet
 
 Later phases may reconcile overlaps and split one package's state into multiple declared subcomponents.
 
@@ -319,23 +332,27 @@ Examples:
 
 ## 5. Toolchain and Install Method Model
 
-### 5.1 Toolchain Versioning
+### 5.1 Toolchain and System Version Policy
 
-System utilities such as `node` should be versioned per instance only when they materially affect reproducibility.
+System utilities such as `node` should be versioned per pack only when they
+materially affect reproducibility.
 
 Default approach:
 
 - allow `system` toolchains by default
 - support `nvm` as a practical Node version source
-- pin a package-local toolchain only when build or runtime behavior depends on it
+- pin a pack-local toolchain only when build or runtime behavior depends on it
+- allow a component to declare either a minimum acceptable system version or an
+  exact pinned version even when the current implementation still uses the
+  present system install
 
-Examples where per-instance toolchain pinning is desirable:
+Examples where per-pack toolchain pinning is desirable:
 
 - OpenClaw built from source with Node and pnpm
-- packages with native modules sensitive to Node ABI
+- components with native modules sensitive to Node ABI
 - reproducible CI or release builds
 
-Examples where per-instance toolchain pinning is optional:
+Examples where per-pack toolchain pinning is optional:
 
 - a downloaded standalone `gogcli` binary
 - a static `himalaya` release binary
@@ -343,9 +360,43 @@ Examples where per-instance toolchain pinning is optional:
 Decision:
 
 - toolchain refs are supported natively
-- toolchain refs are optional per package
+- toolchain refs are optional per component
 - they should not be forced onto every package
 - system-global installs remain valid package sources when explicitly declared
+
+For system-managed tools and binaries, Setpack should support both policies in
+principle:
+
+- `version_policy = "minimum"`
+  accept any system version at or above a declared floor
+- `version_policy = "pinned"`
+  require one exact version and reject other resolved system versions
+
+That policy should apply both to toolchains and to system-managed component
+bundles. The first implementation can center on today's system installs and
+validation only, but the spec should preserve the ability to:
+
+- verify the resolved system version
+- reject a version that does not satisfy the declared policy
+- select an approved system-installed alternative when more than one is present
+- fall back to a localized install later when the system version is not
+  acceptable
+
+Example policy shape:
+
+```toml
+[components.openclaw.toolchain]
+source = "nvm"
+name = "node"
+version_policy = "pinned"
+version = "25.6.1"
+
+[components.gog.bundle]
+install_adapter = "system-existing"
+source = "brew"
+version_policy = "minimum"
+min_version = "0.12.0"
+```
 
 ### 5.2 Install Adapters
 
@@ -368,18 +419,28 @@ The install adapter is part of the bundle definition.
 
 It means:
 
-- do not reinstall the package
+- do not reinstall the existing system copy in place
 - record the currently resolved binary path and version
-- treat that path as the package bundle input for validation and wrapper generation
+- treat that resolved binary as the source input for validation and wrapper generation
+- allow the pack bootstrap to duplicate or wrap that binary inside the pack
+- keep the door open to replace it later with a fully pack-managed bundle
+
+`system-existing` does not mean “never install locally.”
+It means:
+
+- the current step uses an already-installed system copy as the source of truth
+- Setpack still records and validates the version policy for that source
+- a later step may replace that source with a localized or specialized install
+  if policy or reproducibility requires it
 
 Example:
 
 ```toml
-[packages.openclaw.bundle]
+[components.openclaw.bundle]
 ref = "openclaw@2026.2.25+git.78ddb1e9df#sha256:..."
 install_adapter = "npm-source-build"
 
-[packages.openclaw.bundle.inputs]
+[components.openclaw.bundle.inputs]
 repo = "git@github.com:.../openclaw.git"
 commit = "78ddb1e9df"
 toolchain_ref = "node@25.6.1"
@@ -388,13 +449,25 @@ lockfile_hash = "sha256:..."
 ```
 
 ```toml
-[packages.gogcli.bundle]
+[components.gog.bundle]
 ref = "gogcli@0.12.0+c18c58c#sha256:..."
 install_adapter = "curl-tarball"
 
-[packages.gogcli.bundle.inputs]
+[components.gog.bundle.inputs]
 url = "https://..."
 sha256 = "..."
+```
+
+```toml
+[components.gog.bundle]
+ref = "gogcli@0.12.0+c18c58c"
+install_adapter = "system-existing"
+version_policy = "minimum"
+min_version = "0.12.0"
+
+[components.gog.bundle.inputs]
+source = "brew"
+binary = "/opt/homebrew/bin/gog"
 ```
 
 ### 5.3 Execution Search Paths
@@ -403,8 +476,8 @@ Execution search paths should be generated per instance.
 
 Setpack should compute, in order:
 
-1. package-local wrapper path
-2. package bundle binary path
+1. component-local wrapper path
+2. component bundle binary path
 3. optional toolchain binary path
 4. optional system fallback path
 
@@ -475,63 +548,31 @@ Each package gets the same path classes, even if some packages do not use all of
 - `runtime_dir`
   logs and temporary files
 
-## 7. Instance Manifest
+## 7. Pack Manifest
 
-Each instance should have one manifest at:
+Each pack should have one manifest at:
 
 ```text
-~/.config/setpack/instances/<instance-label>/instance.toml
+<set>/<pack>/pack.toml
 ```
+
+The first implementation should use a restricted TOML profile:
+
+- lower-case names only
+- `name=true|false` entries for membership tables
+- no arrays
+- no inline objects
+- no quoted names in membership tables
 
 Example:
 
 ```toml
-instance = "prod"
-description = "Primary local production-like Claw environment"
+set="openclaw"
+pack="today"
 
-[packages.openclaw]
-bundle_ref = "openclaw@2026.2.25+git.78ddb1e9df#sha256:..."
-toolchain_ref = "node@25.6.1"
-config_ref = "openclaw-config@mail-v3#sha256:..."
-cred_ref = "openclaw-cred@2026-04-11#sha256:..."
-state_ref = "openclaw-state@2026-04-11T21:30:00Z#sha256:..."
-
-[packages.openclaw.models.default]
-provider = "openai"
-account = "chatgpt-main"
-model = "gpt-5.4"
-
-[[packages.openclaw.models.default.fallback]]
-provider = "google"
-account = "paid"
-model = "gemini-2.5-pro"
-
-[[packages.openclaw.models.default.fallback]]
-provider = "anthropic"
-account = "work"
-model = "claude-sonnet-4"
-
-[packages.openclaw.agents.main.model]
-provider = "openai"
-account = "chatgpt-main"
-model = "gpt-5.4"
-
-[packages.openclaw.agents.research.model]
-provider = "google"
-account = "paid"
-model = "gemini-2.5-pro"
-
-[packages.gogcli]
-bundle_ref = "gogcli@0.12.0+c18c58c#sha256:..."
-config_ref = "gogcli-config@default-v1#sha256:..."
-cred_ref = "gogcli-cred@2026-04-11#sha256:..."
-state_ref = "gogcli-state@2026-04-11T21:30:00Z#sha256:..."
-
-[packages.himalaya]
-bundle_ref = "himalaya@1.2.0#sha256:..."
-config_ref = "himalaya-config@mail-v2#sha256:..."
-cred_ref = "himalaya-cred@2026-04-11#sha256:..."
-state_ref = "himalaya-state@empty#sha256:..."
+[components]
+openclaw=true
+gog=true
 
 [paths]
 bundle_root = "/opt/setpack/bundles"
@@ -558,7 +599,44 @@ Examples:
 - share one `himalaya` config set between `dev` and `prod`
 - restore an older `openclaw` state snapshot into a newer bundle for debugging
 
-### 7.1 LLM Access Is Provider Plus Account Plus Model
+### 7.1 Component Inclusion and Pack-Level Parameters
+
+The pack manifest should explicitly list which components belong to the pack.
+
+Use:
+
+```toml
+[components]
+openclaw=true
+gog=true
+himalaya=true
+```
+
+This is better than relying only on directory discovery because it answers:
+
+- what the pack is supposed to contain
+- what is intentionally excluded
+
+In the restricted profile, membership is expressed by lower-case keys set to
+`true` or `false`. Ordering is not carried here.
+
+Each component should also allow a generalized parameter block for pack-level
+choices that are not part of the component bundle/config/cred/state refs
+themselves.
+
+Use:
+
+```toml
+[components.<name>.params]
+install_mode = "managed"
+cred_mode = "hybrid"
+state_mode = "pack-local"
+```
+
+This gives the controller one place to express pack intent per component without
+forcing everything into component-specific manifests.
+
+### 7.2 LLM Access Is Provider Plus Account Plus Model
 
 LLM access should not be represented as a single flat provider name.
 
@@ -588,7 +666,7 @@ It is better represented as one of:
 
 depending on which behavior is actually different.
 
-### 7.2 Package and Agent Model Selection
+### 7.3 Component and Agent Model Selection
 
 Model access should be configurable at multiple scopes:
 
@@ -749,7 +827,7 @@ Automatic overlap reconciliation is a later phase.
 
 Exports and restores should happen at two scopes:
 
-- `instance`
+- `pack`
 - `package`
 
 And at four kinds:
@@ -764,13 +842,13 @@ And at four kinds:
 Recommended operator-facing commands:
 
 ```text
-setpack apply <instance>
-setpack run <instance> <package> [-- ...]
-setpack export <instance> [--package <name>] --kind <bundle|config|cred|state>
-setpack import <instance> [--package <name>] --kind <bundle|config|cred|state> <ref-or-path>
-setpack snapshot <instance> [--package <name>]
-setpack doctor <instance>
-setpack lock <instance>
+setpack apply <set> <pack>
+setpack run <set> <pack> <package> [-- ...]
+setpack export <set> <pack> [--package <name>] --kind <bundle|config|cred|state>
+setpack import <set> <pack> [--package <name>] --kind <bundle|config|cred|state> <ref-or-path>
+setpack snapshot <set> <pack> [--package <name>]
+setpack doctor <set> <pack>
+setpack lock <set> <pack>
 ```
 
 ### 9.2 Export Rules
@@ -998,13 +1076,13 @@ resolved_model = "gpt-5.4"
 Minimum command set:
 
 ```text
-setpack apply <instance>
-setpack validate <instance>
-setpack update <instance> [--package <name>]
-setpack export <instance> [--package <name>] --kind <bundle|config|cred|state>
-setpack import <instance> [--package <name>] --kind <bundle|config|cred|state> <ref-or-path>
-setpack run <instance> <package> [-- ...]
-setpack lock <instance>
+setpack apply <set> <pack>
+setpack validate <set> <pack>
+setpack update <set> <pack> [--package <name>]
+setpack export <set> <pack> [--package <name>] --kind <bundle|config|cred|state>
+setpack import <set> <pack> [--package <name>] --kind <bundle|config|cred|state> <ref-or-path>
+setpack run <set> <pack> <package> [-- ...]
+setpack lock <set> <pack>
 ```
 
 ### 10.4 Package Adapter Interface
@@ -1192,6 +1270,15 @@ exec openclaw ...
 
 This avoids dependence on account-global dotfiles and reduces accidental state crossover.
 
+Operational requirement:
+
+- the wrapper must also make executable lookup explicit for child processes
+- if a component discovers helpers by name, the wrapper should prepend the
+  pack `bin/` directory to `PATH` before it execs the managed binary
+- this is required for setups like OpenClaw + Gog, where OpenClaw spawns
+  `gog` by executable name and must resolve the pack-local wrapper rather than
+  a system-global binary
+
 ### 13.4 Phase 0 Walkthrough: Capture Parametrization Around Existing Installs
 
 The first end-to-end validation should not replace current installations.
@@ -1288,22 +1375,10 @@ This appendix isolates Claw-specific mapping examples from the generic `setpack`
 
 Machine-local observations belong in `ClawInfo.md`.
 
-The current `~/.openclaw-repo` layout should eventually be decomposed by class, not merely by moving everything to a different account-attached tree.
-
 ### 15.1 Naming Notes From Current OpenClaw Config
 
-Some current OpenClaw profile names are historical artifacts.
-
-Examples:
-
-- `openai-codex:default`
-- `openai-codex:codex-cli`
-- `openai:api-key`
-- `anthropic:anthropic`
-- `google:paid`
-- `google:free`
-
-For `setpack`, these should be treated as package-local labels from the current OpenClaw configuration, not as stable global naming.
+Current OpenClaw labels and profile names should be treated as package-local
+artifacts, not as stable global naming.
 
 ### 15.2 Move to Config Set
 
@@ -1330,6 +1405,16 @@ For `setpack`, these should be treated as package-local labels from the current 
 - sessions
 - logs
 - transient watch state
+
+### 15.6 Current OpenClaw Env Inventory
+
+The current user-facing `OPENCLAW_*` environment-variable inventory belongs in
+`ClawInfo.md`, not in this design spec.
+
+Design implication:
+
+- `setpack` should use wrapper env vars for OpenClaw state and config
+- workspace should be injected via `openclaw onboard --workspace <dir>` or persisted in config
 
 ## 16. Reliability Rules
 
@@ -1592,6 +1677,570 @@ Implement `setpack` in this order:
 5. package cred schema and materialization rules
 6. package component archive format for `config`, `cred`, and `state`
 7. `apply`, `validate`, `update`, `export`, `import`, and `lock` commands
+
+## 18. Automation Sketch
+
+This section sketches the first script layout for `setpack`.
+
+The goal is not a finished implementation. The goal is to make the controller
+boundaries concrete enough that the next phase can be built incrementally.
+
+### 18.1 Generic Controller Scripts
+
+Recommended first scripts:
+
+```text
+setpack/scripts/
+  lib/setpack-common.sh
+  setpack-plan.sh
+  setpack-apply.sh
+  setpack-validate.sh
+  adapters/install-package.sh
+  adapters/openclaw-package.sh
+```
+
+Roles:
+
+- `setpack-plan.sh`
+  resolve a set and pack into component directories, manifests, wrappers, and
+  install adapters
+- `setpack-apply.sh`
+  run component apply steps in pack order
+- `setpack-validate.sh`
+  verify wrappers, config roots, state roots, and component-specific smoke checks
+- `adapters/install-package.sh`
+  dispatch install work by adapter kind
+- `adapters/openclaw-package.sh`
+  add component-specific behavior for OpenClaw
+
+The controller layer should stay generic.
+
+It should know about:
+
+- sets
+- packs
+- component manifests
+- install adapters
+- pack-level validation
+
+It should not contain:
+
+- component-specific credential semantics
+- component-specific workspace import logic
+- component-specific sandbox behavior
+
+Those belong in component adapters.
+
+### 18.2 Set and Pack Resolution
+
+The generic scripts should resolve:
+
+```text
+<setpacks-root>/<set>/<pack>/
+```
+
+For example:
+
+```text
+/Users/walter/Work/Claw/Setpacks/openclaw/today/
+```
+
+The first implementation should accept:
+
+- `SETPACK_PACKS_ROOT`
+- `<set>`
+- `<pack>`
+
+and infer component directories under that pack by looking for:
+
+```text
+<component>/comp.toml
+```
+
+This avoids prematurely requiring one large central manifest parser before the
+controller shape is proven.
+
+The first implementation should:
+
+- read `[components]` from `pack.toml`
+- treat keys set to `true` as the authoritative included-component set
+- use directory discovery only as a fallback or consistency check
+
+### 18.3 Component Adapter Contract
+
+Each component adapter should support these conceptual operations:
+
+- `plan`
+- `apply`
+- `validate`
+- `export_config`
+- `export_cred`
+- `export_state`
+- `import_config`
+- `import_cred`
+- `import_state`
+
+The first shell sketches only implement `apply` and `validate`.
+
+### 18.4 Install Specialization
+
+The generic install dispatcher should branch by `install_adapter`.
+
+The first supported adapter names should be:
+
+- `system-existing`
+- `brew`
+- `npm-dist`
+- `npm-source-build`
+- `curl-tarball`
+- `git-build`
+- `cargo-build`
+- `manual`
+
+Expected responsibilities:
+
+- `system-existing`
+  record binary path and version, validate declared version policy, then refresh wrappers and config/cred/state
+  placement around the existing install
+- `brew`
+  install or verify Homebrew package presence, then record the resolved binary
+- `npm-dist`
+  install from npm into the component `bundle/` root
+- `git-build`
+  clone or refresh a pinned repo, then build a component-local bundle
+- `cargo-build`
+  compile a pinned Rust repo into a component-local bundle
+
+### 18.5 Groups of Projects
+
+Setpack needs to support both:
+
+- one pack for one package family
+- one pack spanning multiple related projects
+
+Examples:
+
+- `openclaw/today`
+  one pack containing `openclaw`, `gog`, `himalaya`
+- `mailstack/dev`
+  one pack containing multiple mail-related repos and tools
+
+The generic scripts should therefore operate on package directories discovered
+inside a pack, not assume the set name and package name are the same.
+
+### 18.6 OpenClaw-Specific Automation
+
+OpenClaw needs a package adapter because it has package-native behaviors that
+are more specific than generic `config`, `cred`, and `state`.
+
+The first adapter should handle:
+
+- `openclaw.json` rendering
+- wrapper generation with:
+  - `OPENCLAW_STATE_DIR`
+  - `OPENCLAW_CONFIG_PATH`
+- default workspace handling for `onboard`
+- package-local workspace placement
+- package-local auth profile store
+- `models status` smoke checks
+
+Install specialization inside the OpenClaw adapter should cover:
+
+- `system-existing`
+  wrap an existing npm or Homebrew CLI install
+- `npm-dist`
+  install a pinned OpenClaw version into `bundle/`
+- `git-build`
+  build OpenClaw from repo using pinned Node and package-manager refs
+
+### 18.7 Sandboxing Specialization
+
+Sandboxing should remain an adapter specialization, not a controller primitive.
+
+Two initial OpenClaw-specific sandbox directions should be supported later:
+
+- native OpenClaw techniques
+  examples:
+  - dedicated state/config roots
+  - built-in profile isolation where useful
+  - local gateway and web UI wrapped inside a pack
+- NemoClaw techniques
+  examples:
+  - workspace export/import
+  - memory pack restore
+  - bootstrap of package-local workspace notes
+
+The key design rule is:
+
+- bundle installation
+- configuration materialization
+- workspace import/export
+- sandbox wrapping
+
+must remain separate steps, even when they are run by one `setpack apply`.
+
+### 18.8 First Validation Shape
+
+The first scripts should validate:
+
+- pack exists
+- `pack.toml` exists
+- package manifests exist
+- pack wrapper exists for each package
+- expected package config/state/workspace roots exist
+- package-specific smoke checks run
+
+For OpenClaw, the first smoke checks should include:
+
+- `openclaw --version`
+- `openclaw config file`
+- `openclaw config validate`
+- `openclaw models status --json`
+
+For `gog`, the first smoke checks should include:
+
+- `gog --version`
+- auth command availability
+- confirmation that its isolated home/config roots are used
+
+### 18.9 Why These Are Sketches
+
+The shell files added alongside this document are intentionally narrow.
+
+They are there to make the architecture executable in outline:
+
+- generic controller
+- package adapter boundary
+- install specialization boundary
+- OpenClaw-specific extension points
+
+They are not yet the final product.
+
+### 18.10 Credential Setup Modes
+
+Credential setup should be selectable per package and per integration.
+
+The first implementation should support three modes:
+
+- `automated`
+  copy or materialize credentials directly from an approved source into the
+  target pack
+- `hybrid`
+  automate package install and config, then stop for a native provider login,
+  token paste, or browser OAuth step, then validate and capture the result
+- `manual`
+  operator performs package-native auth manually, then `setpack` records status
+  and validates placement afterward
+
+This applies differently by package:
+
+- `openclaw`
+  provider and channel credentials may be mixed between automated and manual
+  steps
+- `gog`
+  OAuth client material may be automated while account auth remains hybrid
+- `himalaya`
+  config rendering may be automated while app-password entry remains manual or
+  hybrid
+
+### 18.11 Credential Sources
+
+Credential material may come from:
+
+- another pack
+- a dedicated cred store
+- selected system config
+
+This must stay selective.
+
+The controller should not blindly ingest all host credentials.
+
+The first supported patterns should be:
+
+- `from-pack`
+  copy specific files or fields from another pack
+- `from-store`
+  materialize from an explicit cred root or encrypted export
+- `from-system`
+  import from host config only when explicitly named
+
+Each use should be recorded in pack status.
+
+### 18.12 Pack Status Model
+
+Every pack should keep one status file separate from the lockfile.
+
+Recommended file:
+
+```text
+<pack-root>/status.toml
+```
+
+The lockfile answers:
+
+- what was assembled
+
+The status file answers:
+
+- what lifecycle stage each subsystem or integration is in
+- what was attempted
+- what completed
+- what validated
+- what still needs operator action
+
+The status model should distinguish:
+
+- per-subsystem status
+  examples:
+  - `subsystem.openclaw.bundle`
+  - `subsystem.openclaw.config`
+  - `subsystem.openclaw.cred`
+  - `subsystem.gog.bundle`
+  - `subsystem.gog.cred`
+- cross-integration status
+  examples:
+  - `integration.openclaw.ollama`
+  - `integration.openclaw.openai`
+  - `integration.openclaw.openai_codex`
+  - `integration.gog.gmail`
+- overall pack readiness
+
+This lets a pack be:
+
+- partially installed
+- credentialed but not validated
+- validated for one subsystem but not another
+- operational for one integration while another remains planned
+
+Use one enum stage plus milestone flags.
+
+- `.status`
+  lifecycle stage such as `planned`, `completed`, `configured`, `imported`,
+  `validated`, or `available`
+- `.attempted`
+  whether any apply, import, or setup action has been attempted
+- `.completed`
+  whether the intended action completed
+- `.validated`
+  whether post-apply checks passed
+
+The enum and flags are not duplicates. The enum says where the subsystem is in
+its lifecycle. The flags record what evidence exists about that lifecycle.
+
+Recommended meaning by field:
+
+- `.status`
+  the current lifecycle stage or operator-visible state
+- `.attempted`
+  at least one relevant action was attempted
+- `.completed`
+  the intended action finished without stopping mid-step
+- `.validated`
+  the declared post-step checks passed
+
+Recommended lifecycle stages, in normal execution order:
+
+- `planned`
+  declared in the pack but no action taken yet
+- one post-action stage
+  exactly one of:
+  - `completed`
+    a build, install, copy, or wrapper action finished, but no validation has
+    been recorded yet
+  - `configured`
+    config or credential material is present, but not yet validated
+  - `initialized`
+    pack-local state or workspace was created, but not yet validated
+  - `imported`
+    material was copied from another pack or source, but not yet validated in
+    the target pack
+- `validated`
+  the subsystem or integration has passed its expected checks
+
+Special case:
+
+- `available`
+  use only for operator surfaces such as TUI or web UI when the current claim is
+  limited to “it is present and launches” and there is no stronger validation
+  step defined yet
+
+The first implementation should stop there. More specialized stages can be
+added later when the scripts and status processing actually use them.
+
+Recommended flag interpretation:
+
+- `attempted = "yes"`
+  the operator or automation has already touched this item
+- `completed = "yes"`
+  the action reached a stable end state, even if follow-up validation is still
+  pending
+- `validated = "yes"`
+  the pack-specific checks passed for that stable end state
+
+Example matrix:
+
+| Use case | `.status` | `.attempted` | `.completed` | `.validated` |
+| --- | --- | --- | --- | --- |
+| Declared but untouched system tool | `planned` | `no` | `no` | `no` |
+| `system-existing` binary recorded, wrapper written, no smoke check yet | `completed` | `yes` | `yes` | `no` |
+| API key or OAuth login entered, config updated, not yet checked | `configured` | `yes` | `yes` | `no` |
+| State directory or workspace created, not yet exercised | `initialized` | `yes` | `yes` | `no` |
+| `conf` copied from another pack, target pack not yet adjusted or checked | `imported` | `yes` | `yes` | `no` |
+| `system-existing` binary recorded and smoke-checked | `validated` | `yes` | `yes` | `yes` |
+| Imported config adjusted for a new default model and then validated | `validated` | `yes` | `yes` | `yes` |
+| TUI or web UI surface exists and launches, but deeper provider checks are separate | `available` | `yes` | `yes` | `no` |
+
+Usage guidance:
+
+- Use `.status` for the human summary and next-action decision.
+- Use the flags for reporting and automation gates.
+- Treat `validated = "yes"` as the only signal that post-step checks passed.
+- Do not infer validation from `completed = "yes"`.
+- Choose the post-action stage by the kind of work that was just done:
+  - `completed` for build/install/copy/wrapper work
+  - `configured` for config or credential setup
+  - `initialized` for first creation of durable state or workspace
+  - `imported` for material copied from another pack or source
+- Prefer `imported` over `completed` when the source-of-truth is another pack
+  and target-pack validation still matters.
+- Prefer `configured` over `completed` for credentials and provider setup
+  because the operator meaning is clearer.
+- Use `available` only for surfaces. Do not use it for bundles, config, creds,
+  state, or imports.
+
+Possible deviations or out-of-sequence cases:
+
+- A component can go straight from `planned` to `validated` if one command both
+  performs the action and immediately proves it.
+- An imported role can stay `imported` for a while even if other roles in the
+  same component are already `validated`.
+- A surface can remain `available` while its backing provider integration is
+  still only `configured` or `planned`.
+- Re-running import or config steps does not require inventing a new stage; keep
+  the same post-action stage until validation changes it.
+
+Mapping to common pack use cases:
+
+- Fresh OpenClaw npm install into `bundle/`
+  start `planned`, then `completed`, then `validated` after version and config
+  checks pass
+- Pack-local `gog` copied from a system Homebrew binary
+  use `completed` after copy, then `validated` after `gog --version` and wrapper
+  checks pass
+- OpenClaw provider auth entered in the native wizard
+  use `configured` until `models status` or equivalent proves the provider works
+- Gemini planned for tomorrow
+  keep `integration.openclaw.google.status = "planned"` until the work is
+  actually attempted
+- `ocrepo` importing `conf`, `cred`, `state`, and `workspace` from `today`
+  mark each imported role as `imported`, then move to `validated` only after the
+  repo-built wrapper and target config checks pass
+- Imported config with local fallback changes
+  import first as `imported`, then after adjustment and validation mark the
+  target role or integration `validated`
+
+### 18.13a Import Modes
+
+Import should be explicit and selective.
+
+Recommended modes:
+
+- full role import
+  copy one complete role directory such as `conf`, `cred`, `state`, or
+  `workspace`
+- import-and-adjust
+  copy a role, then immediately edit or normalize it for the target pack
+- partial merge
+  copy only specific files or subtrees from the source role
+
+The first implementation only needs full role import plus post-import manual
+adjustment. Partial merge can be a later refinement once the stable role
+boundaries are clearer.
+
+### 18.13b Source, Initialization, and Adjustment Specification
+
+The hierarchy should be carried by directory structure and one manifest at each
+level, not by deep labels such as `components.openclaw.blocks.conf`.
+
+The file format is generic for now. TOML examples are only placeholders.
+
+Use this split:
+
+- `pack.toml`
+  lists included components
+- `<component>/comp.toml`
+  lists included blocks for that component in this pack
+- one section per block in `comp.toml`
+  carries the approved block parameters
+
+Minimal approved shape:
+
+```toml
+# pack.toml
+[components]
+openclaw=true
+gog=true
+```
+
+```toml
+# openclaw/comp.toml
+[blocks]
+conf=true
+cred=true
+state=true
+workspace=true
+bundle=true
+bin=true
+
+[conf]
+included=true
+
+[cred]
+included=true
+
+[state]
+included=true
+```
+
+Use `block` rather than `role` here. A block is a logical setup unit. Today it
+usually maps to a subdirectory such as `conf/` or `state/`, but in principle it
+could later define:
+
+- one file
+- one subtree
+- one section of a file
+
+For now, do not standardize additional block fields beyond:
+
+- block name
+- `include = true|false`
+
+Source selection, initialization rules, and adjustment formats are still needed,
+but their exact field names and syntax are not fixed yet. Do not over-specify
+them until we have a demonstrated use case and approved processing model.
+
+### 18.13 OpenClaw Pack Bootstrap Script
+
+For an OpenClaw-centered pack, it is reasonable to keep one pack-local script
+that duplicates the pack install and wrapper setup.
+
+Example:
+
+```text
+<pack-root>/bin/ocscript
+```
+
+That script should be allowed to:
+
+- create or refresh the approved pack directory layout
+- install the pinned OpenClaw npm distribution into the pack bundle
+- refresh pack wrappers
+- record system-existing companion tools such as `gog`
+- update `status.toml`
+
+It should not silently move or import credentials.
+
+Credential setup should remain explicit through one of the modes above.
 8. OpenClaw package adapter
 9. `gogcli` package adapter
 10. Himalaya package adapter
