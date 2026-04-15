@@ -2,6 +2,8 @@
 
 This note traces the current OpenClaw model labels, canonical names, aliases, and where they are coming from.
 
+Use it for model naming, picker interpretation, and auto-switching observations that are more specific than `Setpack.md` but more focused than the broader current-state inventory in `ClawInfo.md`.
+
 ## Summary
 
 The model picker appears to be showing a mix of:

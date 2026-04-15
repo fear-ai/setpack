@@ -8,6 +8,10 @@ It records what exists now.
 
 Design, rollout, and automation proposals live in `Setpack.md`.
 
+Model-label, alias, and runtime model-selection notes that are more specific than the main design doc live in `ModelNames.md`.
+
+Module-specific work notes that are too detailed or too local for either `Setpack.md` or `ClawInfo.md` can live alongside other operational notes under `/Users/walter/Work/Claw/Setpacks/docs/`, for example `/Users/walter/Work/Claw/Setpacks/docs/Neverest.md`.
+
 This tracked copy is sanitized for source control. Secret values, tokens, client secrets, app passwords, private keys, and operator tokens are intentionally redacted.
 
 ## 2. Inventory
