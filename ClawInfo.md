@@ -662,3 +662,27 @@ Current live pack state under `~/Work/Claw/Setpacks/openclaw`:
   - `ocrepo` is import-ready, not run-ready
   - repo build wiring and pack wrappers for `openclaw` and `gog` are still
     missing there
+
+### 10.9 Current OpenClaw environment application and module roles
+
+Current practical module roles in the Setpacks OpenClaw environment are:
+
+- `openclaw`
+  - primary pack-managed controller and runtime surface
+  - currently operational as a pack-local bundle in `today`
+- `gog`
+  - pack-managed Google Workspace module
+  - currently the most complete non-OpenClaw pack-local integration
+- `himalaya`
+  - current mail client / message-operations module
+  - still primarily documented through local config and current-system observations rather than a pack-local module wrapper
+- `neverest`
+  - complementary Pimalaya sync / backup / restore module
+  - currently installed from local cargo source and observed from current-system state, not yet formalized as a pack-local managed module
+  - detailed work notes are captured separately in `/Users/walter/Work/Claw/Setpacks/docs/Neverest.md`
+
+Interpretation:
+
+- Setpack design should stay generic in `Setpack.md`
+- concrete OpenClaw-environment application and module status belong here in `ClawInfo.md`
+- module-specific work notes that are too detailed or too local for the design spec can live beside other generated or investigative docs under `Setpacks/docs/`
