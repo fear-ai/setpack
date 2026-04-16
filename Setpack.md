@@ -364,6 +364,34 @@ Decision:
 - they should not be forced onto every package
 - system-global installs remain valid package sources when explicitly declared
 
+### 5.1.1 Relationship to `pyenv` and `nvm`
+
+Setpack should not behave primarily like a language-version shim manager.
+
+Comparison:
+
+- `pyenv`
+  uses one global shims directory early in `PATH` and resolves commands like
+  `python` and `pip` dynamically
+- `nvm`
+  usually mutates the current shell `PATH` so `node` and `npm` resolve directly
+  from one selected Node install
+- `setpack`
+  should be wrapper-first per pack and per package
+
+Implications for Setpack:
+
+- Setpack may use `nvm`, `pyenv`, or other version managers as toolchain
+  sources
+- Setpack should not require a single account-global dynamic shims directory as
+  the primary execution model
+- pack activation may export pack identity variables and prepend a pack-local
+  `bin/` directory to `PATH`
+- managed package execution should still resolve through generated pack wrappers
+  rather than through a generic shim multiplexer
+- `PATH` mutation in Setpack is mainly for child-process helper discovery, not
+  for general shell-wide runtime switching
+
 For system-managed tools and binaries, Setpack should support both policies in
 principle:
 
@@ -823,6 +851,36 @@ This avoids keeping all credentials in the same tree as the package config or wo
 
 Automatic overlap reconciliation is a later phase.
 
+Compatibility note:
+
+- if a package insists on an encrypted local token store plus a second local
+  decrypt key stored beside it, that pair should be treated as compatibility
+  state rather than as a strong security boundary
+- the portable source of truth should remain explicit exported credential
+  artifacts, not an opaque runtime keystore plus adjacent unlock material
+
+### 8.9 Interactive OAuth and CI
+
+For user OAuth providers, first-time authorization is still interactive even on
+headless machines.
+
+Implications:
+
+- a `--remote` or manual flow only splits the browser consent and token
+  exchange into separate steps
+- it does not remove the need for one human web consent flow somewhere
+- CI should not be expected to perform first-time personal OAuth login
+
+Recommended CI pattern:
+
+- perform the interactive OAuth setup once on a trusted machine
+- export the resulting refresh-token artifact explicitly
+- store that exported token artifact as a `cred` component
+- in CI or other headless environments, materialize the OAuth client file and
+  import the exported refresh-token artifact non-interactively
+- use service-account or access-token flows only where the underlying package
+  and provider genuinely support them
+
 ## 9. Save and Restore Model
 
 Exports and restores should happen at two scopes:
@@ -910,9 +968,10 @@ Examples:
 - `config`
   non-secret CLI configuration
 - `cred`
-  OAuth client file, token exports, keyring references
+  OAuth client file, exported refresh-token artifacts, keyring references
 - `state`
-  durable local CLI state worth preserving
+  durable local CLI state worth preserving, including any compatibility
+  keyring-unlock material required to read a package-mandated local token store
 - `runtime`
   transient watch state and temporary files
 
@@ -1125,6 +1184,8 @@ Wrappers should:
 - set all package paths explicitly
 - prepend package bundle and toolchain paths
 - avoid dependence on account-global shell dotfiles
+- remain concrete per-package entrypoints rather than one generic dynamic shim
+  dispatcher
 
 ## 11. Validation Model
 
@@ -1278,6 +1339,15 @@ Operational requirement:
 - this is required for setups like OpenClaw + Gog, where OpenClaw spawns
   `gog` by executable name and must resolve the pack-local wrapper rather than
   a system-global binary
+
+Clarification:
+
+- prepending the pack `bin/` directory to `PATH` is not meant to turn Setpack
+  into a `pyenv`-style global shim layer
+- it is a narrow execution rule so child helpers resolve to the same pack-local
+  wrappers as the parent package
+- the user-facing invocation path should still be explicit pack wrappers such as
+  `<pack-root>/bin/openclaw` and `<pack-root>/bin/gog`
 
 ### 13.4 Phase 0 Walkthrough: Capture Parametrization Around Existing Installs
 
