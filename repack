@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MANAGED_BEGIN="# >>> setpack defaults >>>"
+MANAGED_END="# <<< setpack defaults <<<"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+TEMPLATE_FILE="$SCRIPT_DIR/dot.setpack"
+
+usage() {
+  cat <<'EOF'
+usage: repack.sh [--dry] [-f] [--file <path>] <pack>
+       repack.sh [--dry] [-f] [--file <path>] <set> <pack>
+       repack.sh [--dry] [-f] [--file <path>] <root_path> <set> <pack>
+
+Update the default Setpack shell selection in the managed block.
+
+Argument forms:
+  1 arg  -> pack
+  2 args -> set pack
+  3 args -> root_path set pack
+
+Behavior:
+  - writes by default
+  - --dry previews only
+  - existing target with managed block: update block only
+  - missing target: create from template
+  - existing target without managed block: refuse unless -f, then replace from template
+EOF
+}
+
+log() {
+  printf '[repack] %s\n' "$*" >&2
+}
+
+die() {
+  printf '[repack] error: %s\n' "$*" >&2
+  exit 1
+}
+
+has_managed_block() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  grep -qF "$MANAGED_BEGIN" "$file" && grep -qF "$MANAGED_END" "$file"
+}
+
+extract_managed_value() {
+  local file="$1"
+  local name="$2"
+  awk -v name="$name" '
+    index($0, "export " name "=\"${" name ":-") == 1 {
+      line = $0
+      sub("^export " name "=\"\\$\\{" name ":-", "", line)
+      sub("\\}\"$", "", line)
+      print line
+      exit
+    }
+  ' "$file"
+}
+
+render_managed_block() {
+  local root_path="$1"
+  local set_name="$2"
+  local pack_name="$3"
+  cat <<EOF
+$MANAGED_BEGIN
+export SETPACK_ROOT="\${SETPACK_ROOT:-$root_path}"
+export SETPACK_SET="\${SETPACK_SET:-$set_name}"
+export SETPACK_PACK="\${SETPACK_PACK:-$pack_name}"
+$MANAGED_END
+EOF
+}
+
+replace_managed_block() {
+  local source_file="$1"
+  local root_path="$2"
+  local set_name="$3"
+  local pack_name="$4"
+
+  awk \
+    -v begin="$MANAGED_BEGIN" \
+    -v end="$MANAGED_END" \
+    -v root_path="$root_path" \
+    -v set_name="$set_name" \
+    -v pack_name="$pack_name" '
+      function print_block() {
+        print begin
+        print "export SETPACK_ROOT=\"${SETPACK_ROOT:-" root_path "}\""
+        print "export SETPACK_SET=\"${SETPACK_SET:-" set_name "}\""
+        print "export SETPACK_PACK=\"${SETPACK_PACK:-" pack_name "}\""
+        print end
+      }
+      BEGIN {
+        in_block = 0
+        replaced = 0
+      }
+      $0 == begin {
+        print_block()
+        in_block = 1
+        replaced = 1
+        next
+      }
+      $0 == end {
+        in_block = 0
+        next
+      }
+      !in_block {
+        print
+      }
+      END {
+        if (!replaced) {
+          print_block()
+        }
+      }
+    ' "$source_file"
+}
+
+[ -f "$TEMPLATE_FILE" ] || die "missing template: $TEMPLATE_FILE"
+has_managed_block "$TEMPLATE_FILE" || die "template missing managed block: $TEMPLATE_FILE"
+
+dry_run="no"
+force_replace="no"
+target_file="$HOME/.setpack"
+positionals=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry)
+      dry_run="yes"
+      shift
+      ;;
+    -f)
+      force_replace="yes"
+      shift
+      ;;
+    --file)
+      [ $# -ge 2 ] || die "--file requires a path"
+      target_file="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --*)
+      usage
+      die "unknown argument: $1"
+      ;;
+    *)
+      positionals+=("$1")
+      shift
+      ;;
+  esac
+done
+
+case "${#positionals[@]}" in
+  1|2|3) ;;
+  *)
+    usage
+    die "expected 1, 2, or 3 positional arguments"
+    ;;
+esac
+
+base_file="$TEMPLATE_FILE"
+source_mode="template"
+
+if [ -f "$target_file" ]; then
+  if has_managed_block "$target_file"; then
+    base_file="$target_file"
+    source_mode="existing-managed"
+  elif [ "$force_replace" = "yes" ]; then
+    base_file="$TEMPLATE_FILE"
+    source_mode="template-forced"
+  else
+    die "existing target lacks managed block: $target_file (rerun with -f to replace from template)"
+  fi
+fi
+
+current_root="$(extract_managed_value "$base_file" "SETPACK_ROOT")"
+current_set="$(extract_managed_value "$base_file" "SETPACK_SET")"
+current_pack="$(extract_managed_value "$base_file" "SETPACK_PACK")"
+
+[ -n "$current_root" ] || die "failed to resolve SETPACK_ROOT from $base_file"
+[ -n "$current_set" ] || die "failed to resolve SETPACK_SET from $base_file"
+[ -n "$current_pack" ] || die "failed to resolve SETPACK_PACK from $base_file"
+
+root_path="$current_root"
+set_name="$current_set"
+pack_name="$current_pack"
+
+case "${#positionals[@]}" in
+  1)
+    pack_name="${positionals[0]}"
+    ;;
+  2)
+    set_name="${positionals[0]}"
+    pack_name="${positionals[1]}"
+    ;;
+  3)
+    root_path="${positionals[0]}"
+    set_name="${positionals[1]}"
+    pack_name="${positionals[2]}"
+    ;;
+esac
+
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+replace_managed_block "$base_file" "$root_path" "$set_name" "$pack_name" > "$tmp"
+
+log "template    : $TEMPLATE_FILE"
+log "target file : $target_file"
+log "source mode : $source_mode"
+log "root        : $root_path"
+log "set         : $set_name"
+log "pack        : $pack_name"
+
+if [ "$dry_run" = "yes" ]; then
+  log "dry-run only; rerun without --dry to write changes"
+  printf '%s\n' "--- $target_file (proposed) ---"
+  cat "$tmp"
+  exit 0
+fi
+
+if [ -f "$target_file" ] && [ "$source_mode" = "template-forced" ]; then
+  backup_file="${target_file}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+  cp "$target_file" "$backup_file"
+  log "backed up existing file to $backup_file"
+fi
+
+mkdir -p "$(dirname "$target_file")"
+cp "$tmp" "$target_file"
+log "updated $target_file"

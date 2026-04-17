@@ -1,0 +1,28 @@
+typeset -U path PATH
+
+# >>> setpack defaults >>>
+export SETPACK_ROOT="${SETPACK_ROOT:-$HOME/Setpacks}"
+export SETPACK_SET="${SETPACK_SET:-set1}"
+export SETPACK_PACK="${SETPACK_PACK:-pack1}"
+# <<< setpack defaults <<<
+
+_setpack_pack_root="$SETPACK_ROOT/$SETPACK_SET/$SETPACK_PACK"
+_setpack_pack_env="$_setpack_pack_root/.setpack.pack.sh"
+
+[[ -f "$_setpack_pack_env" ]] && . "$_setpack_pack_env"
+
+_setpack_bin_root="$SETPACK_ROOT/bin"
+path=(${path:#$_setpack_bin_root})
+path=("$_setpack_bin_root" $path)
+
+if [[ -n "${SETPACK_PACK_BIN:-}" ]]; then
+  path=(${path:#$SETPACK_PACK_BIN})
+  path=("$SETPACK_PACK_BIN" $path)
+else
+  _setpack_pack_bin="$_setpack_pack_root/bin"
+  path=(${path:#$_setpack_pack_bin})
+  path=("$_setpack_pack_bin" $path)
+  unset _setpack_pack_bin
+fi
+
+unset _setpack_pack_root _setpack_pack_env _setpack_bin_root

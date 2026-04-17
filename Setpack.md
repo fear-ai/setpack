@@ -1187,6 +1187,24 @@ Wrappers should:
 - remain concrete per-package entrypoints rather than one generic dynamic shim
   dispatcher
 
+Wrapper path resolution should be relative to the wrapper's own location, not
+hardcoded to one account home such as `"$HOME/Work/Claw/Setpacks/..."`.
+
+Required approach:
+
+- derive `SCRIPT_DIR` from `dirname "$0"`
+- derive `PACK_ROOT` from `SCRIPT_DIR/..`
+- derive component-local paths from that resolved `PACK_ROOT`
+
+That keeps wrappers relocatable and prevents pack behavior from depending on one
+specific account name or one specific home-directory layout.
+
+Do not generate wrappers that embed:
+
+- a literal pack root under one user's home directory
+- a second copied path registry that can drift from the manifest
+- component child paths that can be derived from `PACK_ROOT` and component name
+
 ## 11. Validation Model
 
 Validation must be explicit and automated.
@@ -1836,6 +1854,36 @@ The first implementation should:
 - treat keys set to `true` as the authoritative included-component set
 - use directory discovery only as a fallback or consistency check
 
+### 18.2a One-Root Derivation Rule
+
+Path construction should follow one-root derivation.
+
+Meaning:
+
+- resolve one canonical `pack_root`
+- resolve one canonical `component_root` per included component
+- derive child paths from those roots by convention
+
+Examples of derived child paths:
+
+- `<pack_root>/bin`
+- `<component_root>/bundle`
+- `<component_root>/config`
+- `<component_root>/cred`
+- `<component_root>/state`
+- `<component_root>/runtime`
+- `<component_root>/home`
+
+This avoids a path-registry explosion where the same directory tree is repeated
+across:
+
+- `pack.toml`
+- `<component>/comp.toml`
+- generated wrappers
+- bootstrap scripts
+
+The repeated absolute child paths are not the source of truth. The root is.
+
 ### 18.3 Component Adapter Contract
 
 Each component adapter should support these conceptual operations:
@@ -2243,6 +2291,44 @@ Use this split:
 - one section per block in `comp.toml`
   carries the approved block parameters
 
+Specification files should stay semantic and compact.
+
+That means:
+
+- `pack.toml` should describe set, pack, included components, and other intent
+- `<component>/comp.toml` should describe component identity, refs, adapter
+  choice, block inclusion, and semantic parameters
+- neither file should duplicate every realized absolute child path under the
+  pack unless there is a demonstrated need that cannot be derived from
+  directory structure
+
+Expanded absolute paths in specification files create drift risk because the
+same values then need to be maintained in:
+
+- manifests
+- generated wrappers
+- bootstrap scripts
+- status or lock records
+
+In contrast, realized records may carry absolute paths when those paths are
+historical facts rather than configuration.
+
+Examples of realized records:
+
+- `status.toml`
+- `lock.toml`
+- bundle provenance files such as `SOURCE.toml`
+
+Those files are closer to receipts than manifests. They may record:
+
+- the exact resolved binary that was copied
+- the exact wrapper or config file that was validated
+- the exact local pack root on the machine where validation happened
+
+Receipt-style repetition is acceptable because it answers `what happened here?`
+Specification-style repetition is not acceptable when it tries to answer `how
+should this instance be constructed?`
+
 Minimal approved shape:
 
 ```toml
@@ -2297,7 +2383,7 @@ that duplicates the pack install and wrapper setup.
 Example:
 
 ```text
-<pack-root>/bin/ocscript
+<pack-root>/bin/setpack
 ```
 
 That script should be allowed to:

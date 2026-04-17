@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+setpack_root="${SETPACK_ROOT:-$(cd -- "$script_dir/.." && pwd)}"
+
+usage() {
+  echo "usage: setpack [--root | --path <set> <pack>] | <set> <pack> [args...]" >&2
+  exit 2
+}
+
+if [ "${1:-}" = "--root" ]; then
+  echo "$setpack_root"
+  exit 0
+fi
+
+if [ "${1:-}" = "--path" ]; then
+  set_name="${2:-}"
+  pack_name="${3:-}"
+  [ -n "$set_name" ] || usage
+  [ -n "$pack_name" ] || usage
+  echo "$setpack_root/$set_name/$pack_name/bin"
+  exit 0
+fi
+
+set_name="${1:-}"
+pack_name="${2:-}"
+
+[ -n "$set_name" ] || usage
+[ -n "$pack_name" ] || usage
+
+shift 2
+
+wrapper="$setpack_root/$set_name/$pack_name/bin/$set_name"
+
+[ -x "$wrapper" ] || {
+  echo "missing setpack wrapper: $wrapper" >&2
+  exit 1
+}
+
+exec "$wrapper" "$@"
