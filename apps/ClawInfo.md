@@ -1,25 +1,13 @@
 # Claw Info
 
+Sanitized inventory of the observed local OpenClaw environment: current files,
+paths, versions, command resolution, and runtime surfaces. This file is
+descriptive rather than architectural.
+
 ## 1. Scope
 
-This note is a current-state technical reference sourced from local files, installed packages, and current command resolution on this machine.
-
-It records what exists now.
-
-Design, rollout, and automation proposals live in `Setpack.md`.
-
-Ongoing work, open questions, decisions in progress, and planning/prioritization live in `../Setplan.md`.
-
-OpenClaw-specific Setpack integration notes are being concentrated in `Setclaw.md`.
-
-Pimalaya-facing Setpack integration notes are being concentrated in `Setpimalaya.md`.
-
-Model-label, alias, and runtime model-selection notes that are more specific than the main design doc live in `ModelNames.md`.
-
-Deep email-tool research and future modifications for `gogcli`, `himalaya`,
-`neverest`, and `gws` belong under `/Users/walter/Work/Claw/Emails`, not here.
-
-This tracked copy is sanitized for source control. Secret values, tokens, client secrets, app passwords, private keys, and operator tokens are intentionally redacted.
+This file records what exists now on the observed machine. The tracked copy is
+sanitized for source control.
 
 ## 2. Inventory
 
@@ -305,9 +293,9 @@ Sensitive token values are redacted here.
 - `version`: `1`
 - `onboardingCompletedAt`: `2026-02-17T03:01:02.364Z`
 
-## 7.2 Mail Client Config Files
+### 7.2 Mail Client Config Files
 
-### `~/.config/himalaya/config.toml`
+#### 7.2.1 `~/.config/himalaya/config.toml`
 
 Configured accounts:
 
@@ -340,7 +328,7 @@ Shared folder aliases for all four accounts:
 - drafts -> `[Gmail]/Drafts`
 - trash -> `[Gmail]/Trash`
 
-### `~/.openclaw-repo/workspace/TOOLS.md` mail notes
+#### 7.2.2 `~/.openclaw-repo/workspace/TOOLS.md` mail notes
 
 Recorded there:
 

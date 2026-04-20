@@ -1,27 +1,15 @@
 # Setclaw
 
+OpenClaw-specific Setpacks note for config, auth, state, wrapper behavior, and
+related integration decisions. Keep this file on OpenClaw consequences rather
+than general architecture or raw environment inventory.
+
 ## 1. Purpose
 
-This note is the Setpack-facing integration document for OpenClaw.
-
-Use it for:
-
-- OpenClaw-specific Setpack handling
-- config, auth, state, and wrapper decisions
-- model/provider/profile integration notes
-- gateway/channel/plugin integration consequences
-- skill and prompt coverage gaps that matter for Setpack or pack-local setup
-
-Do not use it as the broad current-state inventory. That remains in
-`ClawInfo.md`.
-
-Do not use it as the deep notebook for email tools. That belongs under
-`/Users/walter/Work/Claw/Emails`.
+This file covers OpenClaw-specific Setpacks handling: config, auth, state,
+wrappers, gateway behavior, and model/provider/profile treatment.
 
 ## 2. Scope
-
-This document should gradually absorb OpenClaw-specific integration material
-from `ClawInfo.md` and related working notes.
 
 Examples of material that belongs here:
 

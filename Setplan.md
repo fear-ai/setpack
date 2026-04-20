@@ -1,39 +1,16 @@
 # Setplan
 
+Active planning notebook for the Setpacks work: open questions, sequencing,
+unsettled design choices, and current priorities. Stable architecture does not
+belong here.
+
 ## 1. Purpose
 
-This document is the active planning notebook for the Setpack project.
+This file tracks work that is still moving: sequencing, unresolved design
+choices, migration staging, and near-term priorities. Once a conclusion is
+stable, it should stop living here.
 
-Use it for:
-
-- ongoing work
-- open questions
-- design decisions in progress
-- issue and task planning
-- prioritization
-
-Do not use it for the stable architecture itself. Approved core design belongs
-in `Setpack.md`.
-
-Do not use it as the deep technical notebook for email tools. That work belongs
-under `/Users/walter/Work/Claw/Emails`, especially `Emails.md`.
-
-## 2. Document Map
-
-- `Setpack.md`
-  - core architecture, terminology, invariants, and approved design
-- `apps/Setclaw.md`
-  - OpenClaw-specific Setpack integration work
-- `apps/Setpimalaya.md`
-  - Setpack-facing integration work for the Pimalaya subsystem
-- `apps/ClawInfo.md`
-  - current-state inventory and older captured facts
-- `apps/ModelNames.md`
-  - focused model/provider/profile/alias naming notes
-- `/Users/walter/Work/Claw/Emails/Emails.md`
-  - email-domain and mail-tool research
-
-## 3. Current Direction
+## 2. Current Direction
 
 The current documentation and implementation work should separate:
 
@@ -56,9 +33,9 @@ Immediate documentation targets:
    - `gws`
    - Maildir and local mail/data surfaces
 
-## 4. Current Work Areas
+## 3. Current Work Areas
 
-### 4.1 Documentation Restructuring
+### 3.1 Documentation Restructuring
 
 - keep `Emails.md` as the deep notebook for mail-domain and tool research
 - concentrate Pimalaya material there into one large family section
@@ -66,7 +43,7 @@ Immediate documentation targets:
 - keep `gws` after `gogcli`
 - use repo-local app notes for Setpack-facing integration consequences only
 
-### 4.2 OpenClaw / Setpack Integration
+### 3.2 OpenClaw / Setpack Integration
 
 - normalize where OpenClaw config, auth, state, and secrets belong
 - continue separating:
@@ -77,7 +54,7 @@ Immediate documentation targets:
 - continue documenting wrapper and gateway behavior from a Setpack point of
   view
 
-### 4.3 Pimalaya / Setpack Integration
+### 3.3 Pimalaya / Setpack Integration
 
 - treat `himalaya` and `neverest` as one coordinated subsystem
 - keep the split explicit:
@@ -90,18 +67,23 @@ Immediate documentation targets:
   - wrapper expectations
   - local store expectations
 
-### 4.4 Google Tooling Positioning
+### 3.4 Google Tooling Positioning
 
 - keep `gogcli` as the practical Gmail-first Google-native operations CLI
 - keep `gws` as the more schema-first Google Workspace API CLI
 - document the difference rather than treating them as substitutes
 
-## 5. Open Questions
+## 4. Open Questions
 
 - What should become first-class managed components versus remain external
   system tools?
 - How much of current app configuration should be materialized versus left in
   native tool stores?
+- What should `reversible changes` mean precisely in Setpack terms:
+  - wrapper and path rollback
+  - credential-set swapping
+  - component downgrade or replacement
+  - isolation of validation residue from long-term state
 - How should shared credential sources be handled across:
   - OpenClaw
   - `gogcli`
@@ -109,15 +91,23 @@ Immediate documentation targets:
   - Pimalaya tools
 - What is the right steady-state role of `apps/ClawInfo.md` once material is
   absorbed into `apps/Setclaw.md` and `apps/Setpimalaya.md`?
+- Which hybrid patterns should become first-class instead of ad hoc:
+  - pack-local wrappers around system-installed binaries
+  - local validation followed by CI promotion
+  - host-shaped tools coordinated beside containerized sidecars
+  - eventual handoff into more formal deployment systems
 
-## 6. Immediate Priorities
+## 5. Immediate Priorities
 
 1. finish the documentation split cleanly
 2. preserve findings before applying large configuration changes
 3. keep component boundaries explicit in docs before enforcing them in code
 4. sort decisions by subject and by application before implementation changes
+5. define `reversible changes` well enough to either keep or replace the term
+6. decide which hybrid deployment and validation patterns are real design targets
+   rather than speculative examples
 
-## 7. Deferred
+## 6. Deferred
 
 - broad cleanup of older historical notes
 - deciding whether `apps/ModelNames.md` remains separate or is absorbed into
@@ -125,14 +115,14 @@ Immediate documentation targets:
 - deciding whether Pimalaya-specific notes inside `/Users/walter/Work/Claw/Emails`
   should eventually split into a dedicated `Pimalaya.md`
 
-## 8. Legacy Script Notes To Preserve Before Disposition
+## 7. Legacy Script Notes To Preserve Before Disposition
 
 The material under `scripts/` should not be treated as the active Setpack
 controller. It is a sketch tree with stale path assumptions and incomplete
 shell logic. The shell itself is a disposition candidate, but several design
 points are still worth preserving here before the directory is moved.
 
-### 8.1 Intended Controller Boundaries
+### 7.1 Intended Controller Boundaries
 
 The old script sketches captured a useful split of responsibilities:
 
@@ -145,7 +135,7 @@ The old script sketches captured a useful split of responsibilities:
 
 This remains relevant even if the concrete shell implementation is discarded.
 
-### 8.2 Wrapper-First Execution
+### 7.2 Wrapper-First Execution
 
 The sketches correctly pointed toward wrapper-first execution as the primary
 Setpack model:
@@ -159,7 +149,7 @@ Setpack model:
 This aligns with the current repo-root `setpack` direction and should stay part
 of the approved execution model.
 
-### 8.3 Adapter Model Still Worth Keeping
+### 7.3 Adapter Model Still Worth Keeping
 
 The old scripts also captured a still-useful abstraction:
 
@@ -172,7 +162,7 @@ The old scripts also captured a still-useful abstraction:
 The shell implementation should not be reused directly, but the adapter split
 is still a sound design idea.
 
-### 8.4 CI And Headless Auth Direction
+### 7.4 CI And Headless Auth Direction
 
 One of the most useful preserved points from the script notes is the CI
 direction:
@@ -185,7 +175,7 @@ direction:
 This remains especially relevant for Google-facing tools such as `gogcli` and
 `gws`, and for any future automated restore or validation workflow.
 
-### 8.5 What Not To Preserve As Active Design
+### 7.5 What Not To Preserve As Active Design
 
 The following parts of the old script tree should be treated as obsolete
 implementation detail rather than something to repair in place:
@@ -195,7 +185,7 @@ implementation detail rather than something to repair in place:
 - shell sketches that only log intended behavior without enforcing it
 - any implication that the old `scripts/` tree is authoritative
 
-### 8.6 Later Disposition
+### 7.6 Later Disposition
 
 When the `scripts/` directory is moved or archived, preserve only these
 captured design points, not the old shell as current operational guidance.
