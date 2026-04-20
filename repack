@@ -8,9 +8,9 @@ TEMPLATE_FILE="$SCRIPT_DIR/dot.setpack"
 
 usage() {
   cat <<'EOF'
-usage: repack.sh [--dry] [-f] [--file <path>] <pack>
-       repack.sh [--dry] [-f] [--file <path>] <set> <pack>
-       repack.sh [--dry] [-f] [--file <path>] <root_path> <set> <pack>
+usage: repack [--dry] [-f] [--file <path>] <pack>
+       repack [--dry] [-f] [--file <path>] <set> <pack>
+       repack [--dry] [-f] [--file <path>] <root_path> <set> <pack>
 
 Update the default Setpack shell selection in the managed block.
 

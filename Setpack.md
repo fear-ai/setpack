@@ -2386,6 +2386,10 @@ Example:
 <pack-root>/bin/setpack
 ```
 
+The authoritative controller implementation may live in the Setpack repo
+itself, with `<pack-root>/bin/setpack` reduced to a thin entrypoint that
+exports the current pack root and delegates to the repo copy.
+
 That script should be allowed to:
 
 - create or refresh the approved pack directory layout
