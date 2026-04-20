@@ -8,9 +8,16 @@ It records what exists now.
 
 Design, rollout, and automation proposals live in `Setpack.md`.
 
+Ongoing work, open questions, decisions in progress, and planning/prioritization live in `../Setplan.md`.
+
+OpenClaw-specific Setpack integration notes are being concentrated in `Setclaw.md`.
+
+Pimalaya-facing Setpack integration notes are being concentrated in `Setpimalaya.md`.
+
 Model-label, alias, and runtime model-selection notes that are more specific than the main design doc live in `ModelNames.md`.
 
-Module-specific work notes that are too detailed or too local for either `Setpack.md` or `ClawInfo.md` can live alongside other operational notes under `/Users/walter/Work/Claw/Setpacks/docs/`, for example `/Users/walter/Work/Claw/Setpacks/docs/Neverest.md`.
+Deep email-tool research and future modifications for `gogcli`, `himalaya`,
+`neverest`, and `gws` belong under `/Users/walter/Work/Claw/Emails`, not here.
 
 This tracked copy is sanitized for source control. Secret values, tokens, client secrets, app passwords, private keys, and operator tokens are intentionally redacted.
 

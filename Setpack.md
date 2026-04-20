@@ -27,6 +27,37 @@ The core problem is not just program versions. It is the combination of:
 
 Putting credentials, config, workspace, and runtime state into the same `~/.openclaw*` tree invites accidental commits, unsafe image baking, and ambiguous restore behavior.
 
+## 1.1 Documentation Boundaries
+
+Keep the documentation split strict.
+
+- `Setpack.md`
+  - core Setpack architecture, terminology, invariants, and approved design
+    decisions
+- `Setplan.md`
+  - ongoing work, open questions, issue/task planning, prioritization, and
+    decisions still being sorted through
+- `apps/Setclaw.md`
+  - OpenClaw-specific Setpack integration notes
+- `apps/Setpimalaya.md`
+  - Setpack-facing notes for the coordinated Pimalaya subsystem (`himalaya` +
+    `neverest`)
+- `apps/ClawInfo.md`
+  - current-state inventory and older recorded OpenClaw-environment facts
+- `apps/ModelNames.md`
+  - focused model/provider/profile/alias naming notes
+
+Deep email-tool and email-ecosystem research does not belong here.
+
+That material belongs under `/Users/walter/Work/Claw/Emails`, especially
+`Emails.md`, which is the durable home for:
+
+- Pimalaya-family details
+- `gogcli`
+- `gws`
+- Maildir and local-store observations
+- upstream repo review and future tool modifications
+
 ## 2. Decision
 
 Use a hybrid model:
