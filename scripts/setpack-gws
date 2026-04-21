@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SETPACK_TAG="setpack-gws"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/lib/setpack-gws.sh"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/setpack-gws <command>
+
+commands:
+  prepare         ensure gws layout
+  install         record the current gws entrypoint and create the pack-local bundle shim
+  import-system   import ~/.config/gws material into pack-local cred/state (-f to replace)
+  wrap            rewrite the pack-local gws wrapper
+  validate        validate the gws bundle and wrapper
+EOF
+}
+
+main() {
+  setpack_pack_load_context
+  setpack_gws_load_context
+  case "${1:-}" in
+    prepare)
+      setpack_gws_ensure_layout
+      ;;
+    install)
+      setpack_gws_install_bundle
+      ;;
+    import-system)
+      shift
+      setpack_gws_import_system "$@"
+      ;;
+    wrap)
+      setpack_gws_ensure_layout
+      setpack_gws_write_wrapper
+      ;;
+    validate)
+      setpack_gws_validate
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

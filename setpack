@@ -53,6 +53,7 @@ top-level commands:
   wrap             rewrite pack env plus openclaw and gog wrappers
   install-openclaw prepare openclaw layout and install the pinned openclaw bundle
   install-gog      prepare gog layout, duplicate the current gog binary, and rewrite the gog wrapper
+  install-gws      prepare gws layout, record the current gws entrypoint, and rewrite the gws wrapper
   import           import conf|cred|state|workspace for a component from another pack (-f to replace non-empty destination)
   status           print status.toml
   cred-plan        print credential setup approaches
@@ -61,6 +62,7 @@ layered commands:
   pack <command>           generic set/pack substrate operations
   openclaw <command>       openclaw-specific operations
   gog <command>            gog-specific operations
+  gws <command>            gws-specific operations
   openclaw-gog <command>   combination-layer operations
 
 options:
@@ -161,6 +163,12 @@ main() {
       dispatch_script setpack-openclaw-gog refresh-status
       maybe_repack
       ;;
+    install-gws)
+      dispatch_script setpack-gws prepare
+      dispatch_script setpack-gws install
+      dispatch_script setpack-gws wrap
+      maybe_repack
+      ;;
     import)
       shift
       dispatch_script setpack-pack import "$@"
@@ -173,7 +181,7 @@ main() {
     cred-plan)
       show_cred_plan
       ;;
-    pack|openclaw|gog|openclaw-gog)
+    pack|openclaw|gog|gws|openclaw-gog)
       shift
       dispatch_script "setpack-$command" "$@"
       ;;

@@ -21,10 +21,14 @@ setpack_gog_ensure_layout() {
     "$GOG_DIR"/cred \
     "$GOG_DIR"/state \
     "$GOG_DIR"/runtime \
-    "$GOG_DIR"/home \
-    "$GOG_DIR"/bin \
-    "$GOG_DIR"/exports \
-    "$GOG_DIR"/reports
+    "$GOG_DIR"/home
+  mkdir -p \
+    "$GOG_DIR"/config/gogcli \
+    "$GOG_DIR"/cred/gogcli \
+    "$GOG_DIR"/cred/gogcli/tokens \
+    "$GOG_DIR"/cred/gogcli/keyring \
+    "$GOG_DIR"/state/gogcli \
+    "$GOG_DIR"/runtime/gogcli
   setpack_pack_status_mark "subsystem.gog.layout" "completed"
 }
 
@@ -74,8 +78,10 @@ STATE_ROOT="\$ROOT/state/gogcli"
 XDG_ROOT="\$ROOT/runtime"
 APP_ROOT="\$XDG_ROOT/gogcli"
 TOKENS_ROOT="\$CRED_ROOT/tokens"
+KEYRING_ROOT="\$CRED_ROOT/keyring"
 DEFAULT_ACCOUNT_FILE="\$CRED_ROOT/default-account"
-KEYRING_PASSWORD_FILE="\$STATE_ROOT/keyring-password"
+KEYRING_PASSWORD_FILE="\$CRED_ROOT/keyring-password"
+LEGACY_KEYRING_PASSWORD_FILE="\$STATE_ROOT/keyring-password"
 TOKEN_STAMPS_ROOT="\$STATE_ROOT/imported-token-stamps"
 
 [ -x "\$BIN" ] || {
@@ -83,7 +89,7 @@ TOKEN_STAMPS_ROOT="\$STATE_ROOT/imported-token-stamps"
   exit 1
 }
 
-mkdir -p "\$ROOT/home" "\$ROOT/config" "\$ROOT/cred" "\$ROOT/state" "\$ROOT/runtime" "\$ROOT/exports" "\$ROOT/reports"
+mkdir -p "\$ROOT/home" "\$ROOT/config" "\$ROOT/cred" "\$ROOT/state" "\$ROOT/runtime"
 mkdir -p "\$CONFIG_ROOT" "\$CRED_ROOT" "\$STATE_ROOT" "\$APP_ROOT" "\$TOKEN_STAMPS_ROOT"
 export HOME="\$ROOT/home"
 export XDG_CONFIG_HOME="\$XDG_ROOT"
@@ -123,9 +129,37 @@ ensure_link() {
   }
 }
 
-mkdir -p "\$APP_ROOT/keyring" "\$STATE_ROOT/state" "\$STATE_ROOT/drive-downloads" "\$STATE_ROOT/gmail-attachments"
+dir_has_contents() {
+  local dir="\$1"
+  [ -d "\$dir" ] || return 1
+  find "\$dir" -mindepth 1 -maxdepth 1 -print -quit | grep -q .
+}
+
+migrate_runtime_dir_to_cred() {
+  local runtime_dir="\$1"
+  local cred_dir="\$2"
+
+  if [ ! -d "\$runtime_dir" ] || [ -L "\$runtime_dir" ]; then
+    return 0
+  fi
+
+  mkdir -p "\$cred_dir"
+  if dir_has_contents "\$runtime_dir" && ! dir_has_contents "\$cred_dir"; then
+    cp -R "\$runtime_dir"/. "\$cred_dir"/
+  fi
+  rm -rf "\$runtime_dir"
+}
+
+mkdir -p "\$KEYRING_ROOT" "\$STATE_ROOT/state" "\$STATE_ROOT/drive-downloads" "\$STATE_ROOT/gmail-attachments"
+if [ ! -f "\$KEYRING_PASSWORD_FILE" ] && [ -f "\$LEGACY_KEYRING_PASSWORD_FILE" ]; then
+  mkdir -p "\$(dirname "\$KEYRING_PASSWORD_FILE")"
+  cp "\$LEGACY_KEYRING_PASSWORD_FILE" "\$KEYRING_PASSWORD_FILE"
+  chmod 600 "\$KEYRING_PASSWORD_FILE" 2>/dev/null || true
+fi
+migrate_runtime_dir_to_cred "\$APP_ROOT/keyring" "\$KEYRING_ROOT"
 ensure_link "\$CONFIG_ROOT/config.json" "\$APP_ROOT/config.json"
 ensure_link "\$CRED_ROOT/credentials.json" "\$APP_ROOT/credentials.json"
+ensure_link "\$KEYRING_ROOT" "\$APP_ROOT/keyring"
 ensure_link "\$STATE_ROOT/state" "\$APP_ROOT/state"
 ensure_link "\$STATE_ROOT/drive-downloads" "\$APP_ROOT/drive-downloads"
 ensure_link "\$STATE_ROOT/gmail-attachments" "\$APP_ROOT/gmail-attachments"

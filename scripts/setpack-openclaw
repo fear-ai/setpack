@@ -13,6 +13,7 @@ commands:
   prepare   ensure openclaw layout
   install   install the pinned openclaw bundle
   wrap      rewrite the pack-local openclaw wrapper
+  configure create pack-local openclaw config, seed workspace docs, and wire cred/state links
   validate  validate the openclaw bundle, wrapper, and config
 EOF
 }
@@ -30,6 +31,10 @@ main() {
     wrap)
       setpack_openclaw_ensure_layout
       setpack_openclaw_write_wrapper
+      ;;
+    configure)
+      setpack_openclaw_ensure_layout
+      setpack_openclaw_configure
       ;;
     validate)
       setpack_openclaw_validate

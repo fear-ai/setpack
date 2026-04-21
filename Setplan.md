@@ -20,6 +20,18 @@ The current documentation and implementation work should separate:
 - Pimalaya-specific integration work
 - deep email-tool and provider research
 
+Current configuration direction:
+
+- prefer SecretRef to `file` by default for credential-bearing parameters
+- avoid environment-variable storage as the default project credential path,
+  because env-backed secrets tend to sprawl into shell startup files and drift
+  away from project-associated and repo-associated credential handling
+- do not introduce long-lived OpenClaw config "profiles" as a first-class
+  Setpack concept; materially different configurations should become distinct
+  packs
+- still allow limited in-pack config fiddling for manual debug and validation
+  work when useful
+
 Immediate documentation targets:
 
 1. keep `Setpack.md` architecture-only
@@ -53,6 +65,11 @@ Immediate documentation targets:
 - keep model/provider/profile/alias handling explicit and uniform
 - continue documenting wrapper and gateway behavior from a Setpack point of
   view
+- review user-facing metadata leakage before any public release, including
+  whether account email addresses appear in:
+  - wrapper-visible output
+  - state filenames
+  - reports or exported diagnostics
 - split work cleanly between:
   - generic pack substrate
   - OpenClaw component-specific handling
@@ -107,7 +124,27 @@ Immediate documentation targets:
   - host-shaped tools coordinated beside containerized sidecars
   - eventual handoff into more formal deployment systems
 
-## 5. Immediate Priorities
+## 5. Issues And Decisions To Sort
+
+- `PLAN-001`: restructure `Setplan.md` itself so active items are grouped more
+  clearly into decisions, open issues, implementation tasks, and deferred work
+- `PLAN-002`: assign stable short codes to tracked items so discussion can
+  reference them without depending on section order or wording
+- `CRED-001`: make SecretRef-to-file the default Setpack credential pattern
+  unless there is a specific reason to prefer another source
+- `CRED-002`: define when env-backed SecretRefs are still acceptable despite
+  not being the default
+- `CRED-003`: decide how Setpack should handle external CLI homes reused by
+  OpenClaw, especially `.codex`, `.claude`, and any explicit `CODEX_HOME`
+  override
+- `CFG-001`: keep pack-level configuration variation modeled as separate packs,
+  not as a first-class runtime profile system
+- `CFG-002`: define the boundary between acceptable in-pack debug edits and a
+  change large enough to justify a separate pack
+- `CFG-003`: revisit fragment-based source config assembly only as a deferred
+  packaging question, not as an OpenClaw-native runtime capability
+
+## 6. Immediate Priorities
 
 1. finish the documentation split cleanly
 2. preserve findings before applying large configuration changes
@@ -118,23 +155,31 @@ Immediate documentation targets:
    rather than speculative examples
 7. design script layering so higher-level pack scripts call narrower
    app-specific or combination-specific scripts rather than absorbing all logic
+8. restructure `Setplan.md` into a clearer coded tracker before it grows
+   further
 
-## 6. Deferred
+## 7. Deferred
 
 - broad cleanup of older historical notes
 - deciding whether `apps/ModelNames.md` remains separate or is absorbed into
   `apps/Setclaw.md`
 - deciding whether Pimalaya-specific notes inside `/Users/walter/Work/Claw/Emails`
   should eventually split into a dedicated `Pimalaya.md`
+- evaluating a fragment-based config source layout for application configs,
+  where component-specific files such as Discord are authored separately and
+  merged into one runtime `openclaw.json`
+- evaluating whether generated or symlinked runtime config targets are worth
+  standardizing as a Setpack pattern, instead of keeping the final runtime
+  config as the only authoritative file
 
-## 7. Legacy Script Notes To Preserve Before Disposition
+## 8. Legacy Script Notes To Preserve Before Disposition
 
 The notes below refer to the earlier removed shell sketch tree, not to the
 current repo-local `scripts/` collection. That older shell was not an
 authoritative controller. It carried stale path assumptions and incomplete
 logic, but several design points were still worth preserving.
 
-### 7.1 Intended Controller Boundaries
+### 8.1 Intended Controller Boundaries
 
 The old script sketches captured a useful split of responsibilities:
 
@@ -147,7 +192,7 @@ The old script sketches captured a useful split of responsibilities:
 
 This remains relevant even if the concrete shell implementation is discarded.
 
-### 7.2 Wrapper-First Execution
+### 8.2 Wrapper-First Execution
 
 The sketches correctly pointed toward wrapper-first execution as the primary
 Setpack model:
@@ -161,7 +206,7 @@ Setpack model:
 This aligns with the current repo-root `setpack` direction and should stay part
 of the approved execution model.
 
-### 7.3 Adapter Model Still Worth Keeping
+### 8.3 Adapter Model Still Worth Keeping
 
 The old scripts also captured a still-useful abstraction:
 
@@ -174,7 +219,7 @@ The old scripts also captured a still-useful abstraction:
 The shell implementation should not be reused directly, but the adapter split
 is still a sound design idea.
 
-### 7.4 CI And Headless Auth Direction
+### 8.4 CI And Headless Auth Direction
 
 One of the most useful preserved points from the script notes is the CI
 direction:
@@ -187,7 +232,7 @@ direction:
 This remains especially relevant for Google-facing tools such as `gogcli` and
 `gws`, and for any future automated restore or validation workflow.
 
-### 7.5 What Not To Preserve As Active Design
+### 8.5 What Not To Preserve As Active Design
 
 The following parts of the old removed script tree should be treated as obsolete
 implementation detail rather than something to repair in place:
@@ -197,7 +242,7 @@ implementation detail rather than something to repair in place:
 - shell sketches that only log intended behavior without enforcing it
 - any implication that the old `scripts/` tree is authoritative
 
-### 7.6 Later Disposition
+### 8.6 Later Disposition
 
 When referring back to that earlier shell work, preserve only these captured
 design points, not the old implementation as current operational guidance.

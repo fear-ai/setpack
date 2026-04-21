@@ -10,7 +10,27 @@ setpack_openclaw_load_context() {
   OPENCLAW_MANIFEST="$OPENCLAW_DIR/comp.toml"
   OPENCLAW_CONFIG_FILE="$OPENCLAW_DIR/config/openclaw.json"
   OPENCLAW_WRAPPER="$PACK_BIN_DIR/openclaw"
-  export OPENCLAW_DIR OPENCLAW_MANIFEST OPENCLAW_CONFIG_FILE OPENCLAW_WRAPPER
+  OPENCLAW_CRED_ENV_FILE="$OPENCLAW_DIR/cred/openclaw.env"
+  OPENCLAW_STATE_ENV_LINK="$OPENCLAW_DIR/state/.env"
+  OPENCLAW_AGENT_STATE_DIR="$OPENCLAW_DIR/state/agents/main/agent"
+  OPENCLAW_AGENT_CRED_DIR="$OPENCLAW_DIR/cred/agents/main/agent"
+  OPENCLAW_AUTH_PROFILES_LINK="$OPENCLAW_AGENT_STATE_DIR/auth-profiles.json"
+  OPENCLAW_AUTH_STATE_LINK="$OPENCLAW_AGENT_STATE_DIR/auth-state.json"
+  OPENCLAW_WORKSPACE_TEMPLATE_DIR="${HOME}/.openclaw/workspace"
+  OPENCLAW_SOUL_FILE="$OPENCLAW_DIR/workspace/SOUL.md"
+  export \
+    OPENCLAW_DIR \
+    OPENCLAW_MANIFEST \
+    OPENCLAW_CONFIG_FILE \
+    OPENCLAW_WRAPPER \
+    OPENCLAW_CRED_ENV_FILE \
+    OPENCLAW_STATE_ENV_LINK \
+    OPENCLAW_AGENT_STATE_DIR \
+    OPENCLAW_AGENT_CRED_DIR \
+    OPENCLAW_AUTH_PROFILES_LINK \
+    OPENCLAW_AUTH_STATE_LINK \
+    OPENCLAW_WORKSPACE_TEMPLATE_DIR \
+    OPENCLAW_SOUL_FILE
 }
 
 setpack_openclaw_ensure_layout() {
@@ -26,6 +46,12 @@ setpack_openclaw_ensure_layout() {
     "$OPENCLAW_DIR"/bin \
     "$OPENCLAW_DIR"/exports \
     "$OPENCLAW_DIR"/reports
+  chmod 700 \
+    "$OPENCLAW_DIR"/config \
+    "$OPENCLAW_DIR"/cred \
+    "$OPENCLAW_DIR"/state \
+    "$OPENCLAW_DIR"/runtime \
+    "$OPENCLAW_DIR"/home
   setpack_pack_status_mark "subsystem.openclaw.layout" "completed"
 }
 
@@ -70,6 +96,7 @@ SETPACK_PACK_DEFAULT="\$(basename "\$PACK_ROOT")"
 
 export OPENCLAW_STATE_DIR="\$ROOT/state"
 export OPENCLAW_CONFIG_PATH="\$ROOT/config/openclaw.json"
+export OPENCLAW_HOME="\${OPENCLAW_HOME:-\$ROOT/home}"
 export SETPACK_ROOT="\${SETPACK_ROOT:-\$SETPACK_ROOT_DEFAULT}"
 export SETPACK_SET="\${SETPACK_SET:-\$SETPACK_SET_DEFAULT}"
 export SETPACK_PACK="\${SETPACK_PACK:-\$SETPACK_PACK_DEFAULT}"
@@ -103,6 +130,170 @@ exec "\$BIN" "\${args[@]}"
 EOF
   chmod +x "$OPENCLAW_WRAPPER"
   setpack_pack_status_mark "subsystem.openclaw.wrapper" "completed"
+}
+
+setpack_openclaw_ensure_link() {
+  local link_path="$1"
+  local target_path="$2"
+  local target_dir
+
+  target_dir="$(dirname "$target_path")"
+  mkdir -p "$target_dir"
+  mkdir -p "$(dirname "$link_path")"
+
+  if [ -L "$link_path" ]; then
+    if [ "$(readlink "$link_path")" = "$target_path" ]; then
+      return 0
+    fi
+    setpack_die "refusing to replace mismatched symlink: $link_path"
+  fi
+
+  if [ -e "$link_path" ]; then
+    setpack_die "refusing to replace existing path: $link_path"
+  fi
+
+  ln -s "$target_path" "$link_path"
+}
+
+setpack_openclaw_write_cred_env_template() {
+  if [ -e "$OPENCLAW_CRED_ENV_FILE" ]; then
+    return 0
+  fi
+
+  setpack_log "write openclaw cred env template"
+  mkdir -p "$(dirname "$OPENCLAW_CRED_ENV_FILE")"
+  cat > "$OPENCLAW_CRED_ENV_FILE" <<'EOF'
+# OpenClaw pack-local secrets for the apr20 pack.
+# Populate values here; OpenClaw auto-loads this file through state/.env.
+OPENCLAW_GATEWAY_TOKEN=
+DISCORD_BOT_TOKEN=
+TELEGRAM_BOT_TOKEN=
+SLACK_BOT_TOKEN=
+SLACK_APP_TOKEN=
+SLACK_SIGNING_SECRET=
+EOF
+  chmod 600 "$OPENCLAW_CRED_ENV_FILE"
+}
+
+setpack_openclaw_write_config() {
+  [ ! -e "$OPENCLAW_CONFIG_FILE" ] || setpack_die "refusing to overwrite existing config: $OPENCLAW_CONFIG_FILE"
+
+  setpack_log "write openclaw config"
+  mkdir -p "$(dirname "$OPENCLAW_CONFIG_FILE")"
+  cat > "$OPENCLAW_CONFIG_FILE" <<'EOF'
+{
+  "env": {
+    "shellEnv": {
+      "enabled": true,
+      "timeoutMs": 15000
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789,
+    "auth": {
+      "mode": "token",
+      "token": {
+        "source": "env",
+        "provider": "default",
+        "id": "OPENCLAW_GATEWAY_TOKEN"
+      }
+    },
+    "controlUi": {
+      "enabled": true
+    }
+  },
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "token": {
+        "source": "env",
+        "provider": "default",
+        "id": "DISCORD_BOT_TOKEN"
+      },
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist"
+    },
+    "telegram": {
+      "enabled": false,
+      "botToken": {
+        "source": "env",
+        "provider": "default",
+        "id": "TELEGRAM_BOT_TOKEN"
+      },
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist"
+    },
+    "slack": {
+      "enabled": false,
+      "mode": "socket",
+      "botToken": {
+        "source": "env",
+        "provider": "default",
+        "id": "SLACK_BOT_TOKEN"
+      },
+      "appToken": {
+        "source": "env",
+        "provider": "default",
+        "id": "SLACK_APP_TOKEN"
+      },
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist"
+    }
+  }
+}
+EOF
+  chmod 600 "$OPENCLAW_CONFIG_FILE"
+}
+
+setpack_openclaw_seed_workspace_docs() {
+  local src_dir="$OPENCLAW_WORKSPACE_TEMPLATE_DIR"
+  local dest_dir="$OPENCLAW_DIR/workspace"
+  local copied=0
+  local src_file
+  local dest_file
+
+  mkdir -p "$dest_dir"
+
+  [ -d "$src_dir" ] || setpack_die "missing openclaw workspace template dir: $src_dir"
+
+  for src_file in "$src_dir"/*.md; do
+    [ -e "$src_file" ] || continue
+    dest_file="$dest_dir/$(basename "$src_file")"
+    if [ -e "$dest_file" ]; then
+      continue
+    fi
+    cp "$src_file" "$dest_file"
+    chmod 600 "$dest_file"
+    copied=1
+  done
+
+  if [ "$copied" -eq 1 ]; then
+    setpack_log "seed openclaw workspace docs from $src_dir"
+  fi
+}
+
+setpack_openclaw_configure() {
+  setpack_log "configure openclaw pack-local config and credential wiring"
+  mkdir -p "$OPENCLAW_AGENT_CRED_DIR"
+  chmod 700 \
+    "$OPENCLAW_DIR/cred" \
+    "$OPENCLAW_DIR/state" \
+    "$OPENCLAW_DIR/cred/agents" \
+    "$OPENCLAW_DIR/cred/agents/main" \
+    "$OPENCLAW_AGENT_CRED_DIR"
+
+  setpack_openclaw_write_cred_env_template
+  setpack_openclaw_ensure_link "$OPENCLAW_STATE_ENV_LINK" "../cred/openclaw.env"
+  setpack_openclaw_ensure_link "$OPENCLAW_AUTH_PROFILES_LINK" "../../../../cred/agents/main/agent/auth-profiles.json"
+  setpack_openclaw_ensure_link "$OPENCLAW_AUTH_STATE_LINK" "../../../../cred/agents/main/agent/auth-state.json"
+  setpack_openclaw_write_config
+  setpack_openclaw_seed_workspace_docs
+
+  setpack_pack_status_mark "subsystem.openclaw.config" "completed"
+  setpack_pack_status_mark "subsystem.openclaw.cred" "configured"
+  setpack_pack_status_mark "subsystem.openclaw.state" "configured"
 }
 
 setpack_openclaw_validate() {
