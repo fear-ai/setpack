@@ -2,475 +2,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 
-resolve_pack_root() {
-  if [ -n "${SETPACK_PACK_ROOT:-}" ]; then
-    printf '%s\n' "$SETPACK_PACK_ROOT"
-    return 0
-  fi
-  if [ -f "./pack.toml" ] && [ -d "./bin" ]; then
-    pwd -P
-    return 0
-  fi
-  return 1
-}
+. "$SCRIPTS_DIR/lib/setpack-pack.sh"
 
-PACK_ROOT_DEFAULT="$(resolve_pack_root || true)"
-[ -n "$PACK_ROOT_DEFAULT" ] || {
-  printf '[setpack] error: could not resolve pack root; run from a pack root or set SETPACK_PACK_ROOT\n' >&2
-  exit 1
-}
-
-SETPACK_ROOT_DEFAULT="$(CDPATH= cd -- "$PACK_ROOT_DEFAULT/../.." && pwd)"
-PACK_ROOT="$PACK_ROOT_DEFAULT"
-SETPACK_ROOT="${SETPACK_ROOT:-$SETPACK_ROOT_DEFAULT}"
-SET_NAME="$(basename "$(dirname "$PACK_ROOT")")"
-PACK_NAME="$(basename "$PACK_ROOT")"
-OPENCLAW_DIR="$PACK_ROOT/openclaw"
-GOG_DIR="$PACK_ROOT/gog"
-STATUS_FILE="$PACK_ROOT/status.toml"
-PACK_ENV_FILE="$PACK_ROOT/.setpack.pack.sh"
-OPENCLAW_MANIFEST="$OPENCLAW_DIR/comp.toml"
-GOG_MANIFEST="$GOG_DIR/comp.toml"
 REPACK_AFTER="no"
-
-log() {
-  printf '[setpack] %s\n' "$*" >&2
-}
-
-die() {
-  printf '[setpack] error: %s\n' "$*" >&2
-  exit 1
-}
-
-ts() {
-  date -u +"%Y-%m-%dT%H:%M:%SZ"
-}
-
-status_set() {
-  local key="$1"
-  local value="$2"
-  local tmp
-  tmp="$(mktemp)"
-  awk -v key="$key" -v value="$value" '
-    BEGIN { done = 0 }
-    $0 ~ "^" key " = " {
-      print key " = \"" value "\""
-      done = 1
-      next
-    }
-    { print }
-    END {
-      if (!done) {
-        print key " = \"" value "\""
-      }
-    }
-  ' "$STATUS_FILE" > "$tmp"
-  mv "$tmp" "$STATUS_FILE"
-}
-
-status_mark() {
-  local base="$1"
-  local state="$2"
-  status_set "$base.status" "$state"
-  case "$state" in
-    planned)
-      status_set "$base.attempted" "no"
-      status_set "$base.completed" "no"
-      status_set "$base.validated" "no"
-      ;;
-    validated)
-      status_set "$base.attempted" "yes"
-      status_set "$base.completed" "yes"
-      status_set "$base.validated" "yes"
-      ;;
-    completed|configured|initialized|imported|available)
-      status_set "$base.attempted" "yes"
-      status_set "$base.completed" "yes"
-      status_set "$base.validated" "no"
-      ;;
-    in_progress|attempted|hybrid_manual)
-      status_set "$base.attempted" "yes"
-      status_set "$base.completed" "no"
-      status_set "$base.validated" "no"
-      ;;
-    *)
-      ;;
-  esac
-  status_set "$base.last_updated" "$(ts)"
-}
-
-ensure_status_file() {
-  [ -f "$STATUS_FILE" ] || die "missing status file: $STATUS_FILE"
-}
-
-ensure_layout() {
-  log "ensure layout"
-  mkdir -p \
-    "$PACK_ROOT/bin" \
-    "$OPENCLAW_DIR"/{bundle,config,cred,state,runtime,workspace,home,bin,exports,reports} \
-    "$GOG_DIR"/{bundle,config,cred,state,runtime,home,bin,exports,reports}
-  status_mark "subsystem.openclaw.layout" "completed"
-  status_mark "subsystem.gog.layout" "completed"
-}
-
-openclaw_version() {
-  sed -n 's/^package_version = "\(.*\)"/\1/p' "$OPENCLAW_MANIFEST" | head -n 1
-}
-
-gog_system_bin() {
-  sed -n 's/^system_bin = "\(.*\)"/\1/p' "$GOG_MANIFEST" | head -n 1
-}
-
-copy_dir_contents() {
-  local src="$1"
-  local dst="$2"
-  mkdir -p "$dst"
-  if [ -d "$src" ]; then
-    rm -rf "$dst"/*
-    if command -v rsync >/dev/null 2>&1; then
-      rsync -a --delete --exclude='.git' "$src"/ "$dst"/
-    else
-      cp -R "$src"/. "$dst"/
-      rm -rf "$dst/.git"
-    fi
-  fi
-}
-
-role_status_key() {
-  local role="$1"
-  case "$role" in
-    conf) printf 'config\n' ;;
-    cred) printf 'cred\n' ;;
-    state) printf 'state\n' ;;
-    workspace) printf 'workspace\n' ;;
-    *) return 1 ;;
-  esac
-}
-
-write_pack_env() {
-  log "write pack env"
-  cat > "$PACK_ENV_FILE" <<EOF
-export SETPACK_SET="\${SETPACK_SET:-$SET_NAME}"
-export SETPACK_PACK="\${SETPACK_PACK:-$PACK_NAME}"
-export SETPACK_PACK_ROOT="\${SETPACK_PACK_ROOT:-\$SETPACK_ROOT/\$SETPACK_SET/\$SETPACK_PACK}"
-export SETPACK_PACK_BIN="\${SETPACK_PACK_BIN:-\$SETPACK_PACK_ROOT/bin}"
-export SETPACK_STATUS_FILE="\${SETPACK_STATUS_FILE:-\$SETPACK_PACK_ROOT/status.toml}"
-EOF
-  status_mark "subsystem.pack.env" "completed"
-}
-
-install_openclaw_bundle() {
-  local version
-  version="$(openclaw_version)"
-  [ -n "$version" ] || die "cannot read openclaw version from $OPENCLAW_MANIFEST"
-
-  status_set "subsystem.openclaw.bundle.attempted_at" "$(ts)"
-  log "install openclaw@$version into bundle"
-  npm --loglevel=error install --no-audit --no-fund --prefix "$OPENCLAW_DIR/bundle" "openclaw@$version"
-  status_set "subsystem.openclaw.bundle.completed_at" "$(ts)"
-  status_mark "subsystem.openclaw.bundle" "completed"
-}
-
-write_openclaw_wrapper() {
-  log "write openclaw wrapper"
-  cat > "$PACK_ROOT/bin/openclaw" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-
-SCRIPT_DIR="\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)"
-PACK_ROOT="\$(CDPATH= cd -- "\$SCRIPT_DIR/.." && pwd)"
-ROOT="\$PACK_ROOT/openclaw"
-BIN="\$ROOT/bundle/node_modules/.bin/openclaw"
-PACK_WORKSPACE="\$ROOT/workspace"
-PACK_BIN="\$PACK_ROOT/bin"
-SETPACK_ROOT_DEFAULT="\$(CDPATH= cd -- "\$PACK_ROOT/../.." && pwd)"
-SETPACK_SET_DEFAULT="\$(basename "\$(dirname "\$PACK_ROOT")")"
-SETPACK_PACK_DEFAULT="\$(basename "\$PACK_ROOT")"
-
-[ -x "\$BIN" ] || {
-  echo "missing openclaw bundle binary: \$BIN" >&2
-  exit 1
-}
-
-export OPENCLAW_STATE_DIR="\$ROOT/state"
-export OPENCLAW_CONFIG_PATH="\$ROOT/config/openclaw.json"
-export SETPACK_ROOT="\${SETPACK_ROOT:-\$SETPACK_ROOT_DEFAULT}"
-export SETPACK_SET="\${SETPACK_SET:-\$SETPACK_SET_DEFAULT}"
-export SETPACK_PACK="\${SETPACK_PACK:-\$SETPACK_PACK_DEFAULT}"
-export SETPACK_PACK_ROOT="\${SETPACK_PACK_ROOT:-\$PACK_ROOT}"
-export SETPACK_PACK_BIN="\${SETPACK_PACK_BIN:-\$PACK_BIN}"
-export SETPACK_STATUS_FILE="\${SETPACK_STATUS_FILE:-\$PACK_ROOT/status.toml}"
-
-case ":\$PATH:" in
-  *":\$PACK_BIN:"*) ;;
-  *) export PATH="\$PACK_BIN:\$PATH" ;;
-esac
-
-args=("\$@")
-
-if [ "\${1:-}" = "onboard" ]; then
-  has_workspace_flag=0
-  for arg in "\${args[@]}"; do
-    case "\$arg" in
-      --workspace|--workspace=*)
-        has_workspace_flag=1
-        break
-        ;;
-    esac
-  done
-  if [ "\$has_workspace_flag" -eq 0 ]; then
-    args+=("--workspace" "\$PACK_WORKSPACE")
-  fi
-fi
-
-exec "\$BIN" "\${args[@]}"
-EOF
-  chmod +x "$PACK_ROOT/bin/openclaw"
-  status_mark "subsystem.openclaw.wrapper" "completed"
-}
-
-install_gog_bundle() {
-  local bin real_bin
-  bin="$(gog_system_bin)"
-  [ -n "$bin" ] || die "cannot read gog bin from $GOG_MANIFEST"
-  [ -x "$bin" ] || die "missing gog system binary: $bin"
-  real_bin="$(realpath "$bin")"
-
-  log "duplicate gog binary into local bundle from: $real_bin"
-  mkdir -p "$GOG_DIR/bundle/bin"
-  cp -f "$real_bin" "$GOG_DIR/bundle/bin/gog"
-  chmod +x "$GOG_DIR/bundle/bin/gog"
-  cat > "$GOG_DIR/bundle/SOURCE.toml" <<EOF
-source_kind = "bundle-copy"
-install_adapter = "system-existing"
-binary = "$bin"
-resolved_binary = "$real_bin"
-recorded_at = "$(ts)"
-bundle_binary = "$GOG_DIR/bundle/bin/gog"
-EOF
-  status_set "subsystem.gog.bundle.recorded_binary" "$real_bin"
-  status_set "subsystem.gog.bundle.local_binary" "$GOG_DIR/bundle/bin/gog"
-  status_mark "subsystem.gog.bundle" "completed"
-}
-
-write_gog_wrapper() {
-  log "write gog wrapper"
-  cat > "$PACK_ROOT/bin/gog" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-
-SCRIPT_DIR="\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)"
-PACK_ROOT="\$(CDPATH= cd -- "\$SCRIPT_DIR/.." && pwd)"
-ROOT="\$PACK_ROOT/gog"
-BIN="\$ROOT/bundle/bin/gog"
-CONFIG_ROOT="\$ROOT/config/gogcli"
-CRED_ROOT="\$ROOT/cred/gogcli"
-STATE_ROOT="\$ROOT/state/gogcli"
-XDG_ROOT="\$ROOT/runtime"
-APP_ROOT="\$XDG_ROOT/gogcli"
-TOKENS_ROOT="\$CRED_ROOT/tokens"
-DEFAULT_ACCOUNT_FILE="\$CRED_ROOT/default-account"
-KEYRING_PASSWORD_FILE="\$STATE_ROOT/keyring-password"
-TOKEN_STAMPS_ROOT="\$STATE_ROOT/imported-token-stamps"
-
-[ -x "\$BIN" ] || {
-  echo "missing gog bundle binary: \$BIN" >&2
-  exit 1
-}
-
-mkdir -p "\$ROOT/home" "\$ROOT/config" "\$ROOT/cred" "\$ROOT/state" "\$ROOT/runtime" "\$ROOT/exports" "\$ROOT/reports"
-mkdir -p "\$CONFIG_ROOT" "\$CRED_ROOT" "\$STATE_ROOT" "\$APP_ROOT" "\$TOKEN_STAMPS_ROOT"
-export HOME="\$ROOT/home"
-export XDG_CONFIG_HOME="\$XDG_ROOT"
-
-: "\${GOG_KEYRING_BACKEND:=file}"
-export GOG_KEYRING_BACKEND
-
-if [ -z "\${GOG_KEYRING_PASSWORD:-}" ]; then
-  if [ ! -f "\$KEYRING_PASSWORD_FILE" ]; then
-    umask 077
-    openssl rand -hex 32 >"\$KEYRING_PASSWORD_FILE"
-  fi
-  GOG_KEYRING_PASSWORD="\$(tr -d '\r\n' < "\$KEYRING_PASSWORD_FILE")"
-  export GOG_KEYRING_PASSWORD
-fi
-
-ensure_link() {
-  local source="\$1"
-  local dest="\$2"
-  local current=""
-
-  if [ -L "\$dest" ]; then
-    current="\$(readlink "\$dest" || true)"
-    if [ "\$current" = "\$source" ]; then
-      return 0
-    fi
-  fi
-
-  rm -rf "\$dest"
-  ln -s "\$source" "\$dest" 2>/dev/null || {
-    if [ -L "\$dest" ]; then
-      current="\$(readlink "\$dest" || true)"
-      [ "\$current" = "\$source" ] && return 0
-    fi
-    echo "failed to link \$dest -> \$source" >&2
-    return 1
-  }
-}
-
-mkdir -p "\$APP_ROOT/keyring" "\$STATE_ROOT/state" "\$STATE_ROOT/drive-downloads" "\$STATE_ROOT/gmail-attachments"
-ensure_link "\$CONFIG_ROOT/config.json" "\$APP_ROOT/config.json"
-ensure_link "\$CRED_ROOT/credentials.json" "\$APP_ROOT/credentials.json"
-ensure_link "\$STATE_ROOT/state" "\$APP_ROOT/state"
-ensure_link "\$STATE_ROOT/drive-downloads" "\$APP_ROOT/drive-downloads"
-ensure_link "\$STATE_ROOT/gmail-attachments" "\$APP_ROOT/gmail-attachments"
-
-for pattern in "credentials-"*.json "sa-"*.json "keep-sa-"*.json; do
-  for source in "\$CRED_ROOT"/\$pattern; do
-    [ -e "\$source" ] || continue
-    ensure_link "\$source" "\$APP_ROOT/\$(basename "\$source")"
-  done
-done
-
-if [ -z "\${GOG_ACCOUNT:-}" ] && [ -f "\$DEFAULT_ACCOUNT_FILE" ]; then
-  GOG_ACCOUNT="\$(tr -d '\r\n' < "\$DEFAULT_ACCOUNT_FILE")"
-  export GOG_ACCOUNT
-fi
-
-if [ -d "\$TOKENS_ROOT" ]; then
-  for token_file in "\$TOKENS_ROOT"/*.json; do
-    [ -e "\$token_file" ] || continue
-    token_name="\$(basename "\$token_file")"
-    stamp_file="\$TOKEN_STAMPS_ROOT/\$token_name.sha256"
-    token_hash="\$(shasum -a 256 "\$token_file" | awk '{print \$1}')"
-    current_hash=""
-    if [ -f "\$stamp_file" ]; then
-      current_hash="\$(tr -d '\r\n' < "\$stamp_file")"
-    fi
-    if [ "\$token_hash" != "\$current_hash" ]; then
-      "\$BIN" --no-input auth tokens import "\$token_file" >/dev/null
-      printf '%s\n' "\$token_hash" >"\$stamp_file"
-    fi
-  done
-fi
-
-exec "\$BIN" "\$@"
-EOF
-  chmod +x "$PACK_ROOT/bin/gog"
-  status_mark "subsystem.gog.wrapper" "completed"
-}
-
-validate_openclaw() {
-  log "validate openclaw"
-  "$PACK_ROOT/bin/openclaw" --version >/dev/null
-  if [ -f "$OPENCLAW_DIR/config/openclaw.json" ]; then
-    "$PACK_ROOT/bin/openclaw" config file >/dev/null
-    "$PACK_ROOT/bin/openclaw" config validate >/dev/null
-    status_mark "subsystem.openclaw.config" "validated"
-  fi
-  status_mark "subsystem.openclaw.wrapper" "validated"
-  status_set "subsystem.openclaw.bundle.validated_at" "$(ts)"
-  status_mark "subsystem.openclaw.bundle" "validated"
-}
-
-validate_gog() {
-  log "validate gog"
-  "$PACK_ROOT/bin/gog" --version >/dev/null
-  status_mark "subsystem.gog.wrapper" "validated"
-  status_set "subsystem.gog.bundle.validated_at" "$(ts)"
-  status_mark "subsystem.gog.bundle" "validated"
-}
-
-refresh_integration_status() {
-  [ -f "$OPENCLAW_DIR/config/openclaw.json" ] || return 0
-
-  if grep -q '"provider": "brave"' "$OPENCLAW_DIR/config/openclaw.json"; then
-    status_mark "integration.openclaw.brave" "configured"
-  fi
-  if grep -q 'ollama/qwen3.5:latest' "$OPENCLAW_DIR/config/openclaw.json"; then
-    status_mark "integration.openclaw.ollama" "validated"
-  fi
-  if grep -q 'openai/gpt-5.4' "$OPENCLAW_DIR/config/openclaw.json"; then
-    status_mark "integration.openclaw.openai" "validated"
-  fi
-  if grep -q 'openai-codex/gpt-5.4' "$OPENCLAW_DIR/config/openclaw.json"; then
-    status_mark "integration.openclaw.openai_codex" "validated"
-  fi
-  if grep -q 'anthropic/claude-opus-4-6' "$OPENCLAW_DIR/config/openclaw.json"; then
-    status_mark "integration.openclaw.anthropic" "configured"
-  fi
-  if grep -q 'claude-cli/claude-opus-4-6' "$OPENCLAW_DIR/config/openclaw.json"; then
-    status_mark "integration.openclaw.claude_cli" "validated"
-  fi
-}
-
-refresh_overall() {
-  local openclaw_state gog_state config_state gog_mail_state
-  openclaw_state="$(sed -n 's/^subsystem\.openclaw\.bundle\.status = "\(.*\)"/\1/p' "$STATUS_FILE" | head -n 1)"
-  gog_state="$(sed -n 's/^subsystem\.gog\.bundle\.status = "\(.*\)"/\1/p' "$STATUS_FILE" | head -n 1)"
-  config_state="$(sed -n 's/^subsystem\.openclaw\.config\.status = "\(.*\)"/\1/p' "$STATUS_FILE" | head -n 1)"
-  gog_mail_state="$(sed -n 's/^integration\.gog\.gmail\.status = "\(.*\)"/\1/p' "$STATUS_FILE" | head -n 1)"
-
-  if [ "$openclaw_state" = "validated" ] && [ "$gog_state" = "validated" ] && [ "$config_state" = "validated" ] && [ "$gog_mail_state" = "validated" ]; then
-    status_set "overall.status" "openclaw_ready_gog_operational"
-    status_set "overall.ready_to_run" "openclaw_and_gog"
-  elif [ "$openclaw_state" = "validated" ] && [ "$gog_state" = "validated" ] && [ "$config_state" = "validated" ]; then
-    status_set "overall.status" "openclaw_ready_gog_pending"
-    status_set "overall.ready_to_run" "openclaw_only"
-  elif [ "$openclaw_state" = "validated" ]; then
-    status_set "overall.status" "partially_validated"
-    status_set "overall.ready_to_run" "openclaw_only"
-  else
-    status_set "overall.status" "bootstrap"
-    status_set "overall.ready_to_run" "no"
-  fi
-  status_set "pack.updated_at" "$(ts)"
-}
-
-import_component_role() {
-  local role="$1"
-  local component="$2"
-  local src_set="$3"
-  local src_pack="$4"
-  local src_root src_path dst_path status_key
-
-  src_root="$SETPACK_ROOT/$src_set/$src_pack"
-  [ -d "$src_root" ] || die "missing source pack: $src_root"
-  status_key="$(role_status_key "$role")" || die "unknown role: $role"
-
-  case "$role" in
-    conf)
-      src_path="$src_root/$component/config"
-      dst_path="$PACK_ROOT/$component/config"
-      ;;
-    cred)
-      src_path="$src_root/$component/cred"
-      dst_path="$PACK_ROOT/$component/cred"
-      ;;
-    state)
-      src_path="$src_root/$component/state"
-      dst_path="$PACK_ROOT/$component/state"
-      ;;
-    workspace)
-      src_path="$src_root/$component/workspace"
-      dst_path="$PACK_ROOT/$component/workspace"
-      ;;
-    *)
-      die "unknown role: $role"
-      ;;
-  esac
-
-  [ -d "$src_path" ] || die "missing source role dir: $src_path"
-  log "import $role for $component from $src_set/$src_pack"
-  copy_dir_contents "$src_path" "$dst_path"
-  status_mark "subsystem.$component.$status_key" "imported"
-  status_set "subsystem.$component.$status_key.source_pack" "$src_set/$src_pack"
-}
-
-show_status() {
-  cat "$STATUS_FILE"
-}
 
 show_cred_plan() {
   cat <<'EOF'
@@ -511,24 +47,36 @@ usage() {
   cat <<'EOF'
 usage: setpack [--repack] <command>
 
-commands:
-  apply            ensure layout, install openclaw bundle, duplicate gog into local bundle, refresh wrappers
-  validate         validate openclaw and gog wrappers and current pack config
-  install-openclaw install the pinned openclaw bundle only
-  install-gog      duplicate the current gog binary into the local bundle
-  wrap             rewrite pack wrappers and env snippet
+top-level commands:
+  apply            prepare the pack substrate, install openclaw and gog, and refresh wrappers and combination status
+  validate         validate openclaw, gog, and the openclaw-gog combination
+  wrap             rewrite pack env plus openclaw and gog wrappers
+  install-openclaw prepare openclaw layout and install the pinned openclaw bundle
+  install-gog      prepare gog layout, duplicate the current gog binary, and rewrite the gog wrapper
   import           import conf|cred|state|workspace for a component from another pack
   status           print status.toml
   cred-plan        print credential setup approaches
+
+layered commands:
+  pack <command>           generic set/pack substrate operations
+  openclaw <command>       openclaw-specific operations
+  gog <command>            gog-specific operations
+  openclaw-gog <command>   combination-layer operations
 
 options:
   --repack         call repack -f <root> <set> <pack> after successful mutating commands
 EOF
 }
 
+dispatch_script() {
+  local script_name="$1"
+  shift
+  "$SCRIPTS_DIR/$script_name" "$@"
+}
+
 find_repack_script() {
   if [ -n "${SETPACK_REPACK_SCRIPT:-}" ]; then
-    [ -x "$SETPACK_REPACK_SCRIPT" ] || die "SETPACK_REPACK_SCRIPT is not executable: $SETPACK_REPACK_SCRIPT"
+    [ -x "$SETPACK_REPACK_SCRIPT" ] || setpack_die "SETPACK_REPACK_SCRIPT is not executable: $SETPACK_REPACK_SCRIPT"
     printf '%s\n' "$SETPACK_REPACK_SCRIPT"
     return 0
   fi
@@ -536,28 +84,20 @@ find_repack_script() {
     printf '%s\n' "$SCRIPT_DIR/repack"
     return 0
   fi
-  if command -v repack >/dev/null 2>&1; then
-    command -v repack
-    return 0
-  fi
   return 1
 }
 
 maybe_repack() {
-  local command_name="$1"
   local repack_script
-  case "$command_name" in
-    apply|install-openclaw|install-gog|wrap|import) ;;
-    *) return 0 ;;
-  esac
   [ "$REPACK_AFTER" = "yes" ] || return 0
-  repack_script="$(find_repack_script)" || die "--repack requested but repack was not found; set SETPACK_REPACK_SCRIPT or put repack on PATH"
-  log "run repack via $repack_script"
+  setpack_pack_load_context
+  repack_script="$(find_repack_script)" || setpack_die "--repack requested but repack was not found; set SETPACK_REPACK_SCRIPT"
+  setpack_log "run repack via $repack_script"
   "$repack_script" -f "$SETPACK_ROOT" "$SET_NAME" "$PACK_NAME"
 }
 
 main() {
-  ensure_status_file
+  local args command
 
   args=()
   while [ $# -gt 0 ]; do
@@ -572,62 +112,70 @@ main() {
     shift
   done
   set -- "${args[@]}"
+  command="${1:-}"
 
-  case "${1:-}" in
+  case "$command" in
     apply)
-      ensure_layout
-      write_pack_env
-      install_openclaw_bundle
-      write_openclaw_wrapper
-      install_gog_bundle
-      write_gog_wrapper
-      refresh_integration_status
-      refresh_overall
-      maybe_repack "apply"
+      dispatch_script setpack-pack prepare
+      dispatch_script setpack-openclaw prepare
+      dispatch_script setpack-openclaw install
+      dispatch_script setpack-openclaw wrap
+      dispatch_script setpack-gog prepare
+      dispatch_script setpack-gog install
+      dispatch_script setpack-gog wrap
+      dispatch_script setpack-openclaw-gog refresh-status
+      maybe_repack
       ;;
     validate)
-      validate_openclaw
-      validate_gog
-      refresh_integration_status
-      refresh_overall
-      ;;
-    install-openclaw)
-      install_openclaw_bundle
-      refresh_overall
-      maybe_repack "install-openclaw"
-      ;;
-    install-gog)
-      install_gog_bundle
-      write_gog_wrapper
-      refresh_overall
-      maybe_repack "install-gog"
+      local rc=0
+      if ! dispatch_script setpack-openclaw validate; then
+        rc=1
+      fi
+      if ! dispatch_script setpack-gog validate; then
+        rc=1
+      fi
+      if ! dispatch_script setpack-openclaw-gog validate; then
+        rc=1
+      fi
+      return "$rc"
       ;;
     wrap)
-      ensure_layout
-      write_pack_env
-      write_openclaw_wrapper
-      write_gog_wrapper
-      refresh_overall
-      maybe_repack "wrap"
+      dispatch_script setpack-pack prepare
+      dispatch_script setpack-openclaw prepare
+      dispatch_script setpack-openclaw wrap
+      dispatch_script setpack-gog prepare
+      dispatch_script setpack-gog wrap
+      dispatch_script setpack-openclaw-gog refresh-status
+      maybe_repack
+      ;;
+    install-openclaw)
+      dispatch_script setpack-openclaw prepare
+      dispatch_script setpack-openclaw install
+      dispatch_script setpack-openclaw-gog refresh-status
+      maybe_repack
+      ;;
+    install-gog)
+      dispatch_script setpack-gog prepare
+      dispatch_script setpack-gog install
+      dispatch_script setpack-gog wrap
+      dispatch_script setpack-openclaw-gog refresh-status
+      maybe_repack
       ;;
     import)
-      role="${2:-}"
-      component="${3:-}"
-      src_set="${4:-}"
-      src_pack="${5:-}"
-      [ -n "$role" ] || die "usage: setpack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      [ -n "$component" ] || die "usage: setpack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      [ -n "$src_set" ] || die "usage: setpack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      [ -n "$src_pack" ] || die "usage: setpack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      import_component_role "$role" "$component" "$src_set" "$src_pack"
-      refresh_overall
-      maybe_repack "import"
+      shift
+      dispatch_script setpack-pack import "$@"
+      dispatch_script setpack-openclaw-gog refresh-status
+      maybe_repack
       ;;
     status)
-      show_status
+      dispatch_script setpack-pack status
       ;;
     cred-plan)
       show_cred_plan
+      ;;
+    pack|openclaw|gog|openclaw-gog)
+      shift
+      dispatch_script "setpack-$command" "$@"
       ;;
     ""|-h|--help|help)
       usage

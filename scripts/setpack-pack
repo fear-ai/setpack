@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SETPACK_TAG="setpack-pack"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/lib/setpack-pack.sh"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/setpack-pack <command>
+
+commands:
+  prepare   ensure pack substrate and write .setpack.pack.sh
+  env       rewrite .setpack.pack.sh
+  import    import conf|cred|state|workspace for a component from another pack
+  status    print status.toml
+EOF
+}
+
+main() {
+  setpack_pack_load_context
+  case "${1:-}" in
+    prepare)
+      setpack_pack_ensure_substrate
+      setpack_pack_write_env
+      ;;
+    env)
+      setpack_pack_ensure_substrate
+      setpack_pack_write_env
+      ;;
+    import)
+      local role="${2:-}"
+      local component="${3:-}"
+      local src_set="${4:-}"
+      local src_pack="${5:-}"
+      [ -n "$role" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      [ -n "$component" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      [ -n "$src_set" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      [ -n "$src_pack" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      setpack_pack_import_component_role "$role" "$component" "$src_set" "$src_pack"
+      ;;
+    status)
+      setpack_pack_show_status
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

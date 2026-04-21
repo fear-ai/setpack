@@ -603,7 +603,7 @@ Operational note:
 - no separate `OPENCLAW_WORKSPACE` environment variable was identified in the current bundle or docs
 - workspace is handled by `openclaw onboard --workspace <dir>` and then persisted in config
 
-### 10.8 Current Setpacks Snapshot: `today` and `ocrepo`
+### 10.8 Current Setpack Snapshot: `today` and `ocrepo`
 
 Current live pack state under `~/Work/Claw/Setpacks/openclaw`:
 
@@ -664,7 +664,7 @@ Current live pack state under `~/Work/Claw/Setpacks/openclaw`:
 
 ### 10.9 Current OpenClaw environment application and module roles
 
-Current practical module roles in the Setpacks OpenClaw environment are:
+Current practical module roles in the Setpack OpenClaw environment are:
 
 - `openclaw`
   - primary pack-managed controller and runtime surface
@@ -678,10 +678,11 @@ Current practical module roles in the Setpacks OpenClaw environment are:
 - `neverest`
   - complementary Pimalaya sync / backup / restore module
   - currently installed from local cargo source and observed from current-system state, not yet formalized as a pack-local managed module
-  - detailed work notes are captured separately in `/Users/walter/Work/Claw/Setpacks/docs/Neverest.md`
+  - detailed work notes are captured separately in `apps/Neverest.md`
 
 Interpretation:
 
 - Setpack design should stay generic in `Setpack.md`
 - concrete OpenClaw-environment application and module status belong here in `ClawInfo.md`
-- module-specific work notes that are too detailed or too local for the design spec can live beside other generated or investigative docs under `Setpacks/docs/`
+- narrower module-specific work notes can live in repo-local app notes such as
+  `apps/Neverest.md`

@@ -1,12 +1,12 @@
 # Setclaw
 
-OpenClaw-specific Setpacks note for config, auth, state, wrapper behavior, and
+OpenClaw-specific Setpack note for config, auth, state, wrapper behavior, and
 related integration decisions. Keep this file on OpenClaw consequences rather
 than general architecture or raw environment inventory.
 
 ## 1. Purpose
 
-This file covers OpenClaw-specific Setpacks handling: config, auth, state,
+This file covers OpenClaw-specific Setpack handling: config, auth, state,
 wrappers, gateway behavior, and model/provider/profile treatment.
 
 ## 2. Scope
@@ -20,6 +20,7 @@ Examples of material that belongs here:
 - pack-local wrapper behavior
 - gateway installation and service behavior
 - what OpenClaw expects from companion tools such as `gog`
+- OpenClaw plus helper-app combination behavior
 
 ## 3. Current Themes
 
@@ -52,6 +53,24 @@ OpenClaw also carries credentials that are not LLM provider keys, including:
 
 These should be treated according to blast radius and external exposure, not as
 one undifferentiated bucket.
+
+### 3.4 Combination Layer Around OpenClaw
+
+OpenClaw should not absorb all companion-tool behavior into one monolithic app
+handler. There is a separate combination layer for OpenClaw plus the tools it
+expects to call.
+
+Examples:
+
+- OpenClaw plus `gog`, where helper discovery depends on executable name and
+  pack-local `PATH`
+- OpenClaw plus local model backends such as Ollama
+- OpenClaw plus future helper tools that need pack-local wrappers but remain
+  separate components
+
+This file should capture the OpenClaw side of those combinations. The generic
+pack substrate belongs in `Setpack.md`, and pure companion-app internals belong
+in their own subsystem notes.
 
 ## 4. Current Work Targets
 

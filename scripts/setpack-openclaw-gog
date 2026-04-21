@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SETPACK_TAG="setpack-openclaw-gog"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/lib/setpack-openclaw-gog.sh"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/setpack-openclaw-gog <command>
+
+commands:
+  refresh-status  refresh combination and overall status
+  validate        validate the current openclaw-gog combination surface
+EOF
+}
+
+main() {
+  setpack_pack_load_context
+  setpack_openclaw_load_context
+  setpack_gog_load_context
+  case "${1:-}" in
+    refresh-status)
+      setpack_openclaw_gog_refresh_integration_status
+      setpack_openclaw_gog_refresh_overall
+      ;;
+    validate)
+      setpack_openclaw_gog_validate_combination
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

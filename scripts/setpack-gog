@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SETPACK_TAG="setpack-gog"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/lib/setpack-gog.sh"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/setpack-gog <command>
+
+commands:
+  prepare   ensure gog layout
+  install   duplicate the system gog binary into the pack-local bundle
+  wrap      rewrite the pack-local gog wrapper
+  validate  validate the gog bundle and wrapper
+EOF
+}
+
+main() {
+  setpack_pack_load_context
+  setpack_gog_load_context
+  case "${1:-}" in
+    prepare)
+      setpack_gog_ensure_layout
+      ;;
+    install)
+      setpack_gog_install_bundle
+      ;;
+    wrap)
+      setpack_gog_ensure_layout
+      setpack_gog_write_wrapper
+      ;;
+    validate)
+      setpack_gog_validate
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

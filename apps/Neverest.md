@@ -3,7 +3,7 @@
 Neverest-specific working note for commands, local integration observations, and
 material still too narrow or provisional for the broader subsystem notes.
 
-This note captures the current Neverest-specific work around the OpenClaw and Setpacks environment.
+This note captures the current Neverest-specific work around the OpenClaw and Setpack environment.
 
 It remains useful where the material is still narrower, more operational, or
 more provisional than the broader subsystem notes.

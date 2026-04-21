@@ -1,18 +1,18 @@
 # Setpimalaya
 
-Setpacks-facing note for the coordinated Pimalaya subsystem, especially
+Setpack-facing note for the coordinated Pimalaya subsystem, especially
 `himalaya` and `neverest` as a paired environment with shared config,
 credential, state, and local-store concerns.
 
 ## 1. Purpose
 
-This file covers Setpacks-specific handling of the coordinated Pimalaya
+This file covers Setpack-specific handling of the coordinated Pimalaya
 subsystem, especially `himalaya` and `neverest` as a paired environment with
 shared config, credentials, state, wrappers, and local-store concerns.
 
 ## 2. Scope
 
-This file should hold the Setpacks consequences of that subsystem rather than
+This file should hold the Setpack consequences of that subsystem rather than
 the broader provider or upstream research around it.
 
 ## 3. Working Model
@@ -34,6 +34,11 @@ Current functional split:
   - move, copy, flag, and delete
 
 This split should remain visible in Setpack docs and future component handling.
+
+It is also a combination layer rather than a generic pack concern. The general
+set and pack substrate belongs in `Setpack.md`. This file is for the
+cooperation-specific handling of `himalaya` and `neverest` as one managed
+subsystem.
 
 ## 4. Setpack-Relevant Themes
 
@@ -77,4 +82,4 @@ Over time, this file should absorb:
   component or component pair
 
 The deep technical review, upstream notes, and broader ecosystem analysis should
-remain in `/Users/walter/Work/Claw/Emails/Emails.md`.
+remain in `Claw/Emails/Emails.md`.

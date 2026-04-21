@@ -1,6 +1,6 @@
 # Setplan
 
-Active planning notebook for the Setpacks work: open questions, sequencing,
+Active planning notebook for the Setpack work: open questions, sequencing,
 unsettled design choices, and current priorities. Stable architecture does not
 belong here.
 
@@ -53,6 +53,10 @@ Immediate documentation targets:
 - keep model/provider/profile/alias handling explicit and uniform
 - continue documenting wrapper and gateway behavior from a Setpack point of
   view
+- split work cleanly between:
+  - generic pack substrate
+  - OpenClaw component-specific handling
+  - OpenClaw plus helper-app combinations such as `gog`
 
 ### 3.3 Pimalaya / Setpack Integration
 
@@ -66,6 +70,8 @@ Immediate documentation targets:
   - state placement
   - wrapper expectations
   - local store expectations
+- keep the generic pack substrate separate from subsystem-specific wrapper or
+  store logic
 
 ### 3.4 Google Tooling Positioning
 
@@ -77,6 +83,10 @@ Immediate documentation targets:
 
 - What should become first-class managed components versus remain external
   system tools?
+- Which responsibilities belong to:
+  - the general set/pack substrate
+  - application-specific component handlers
+  - higher-level combination handlers for cooperating apps?
 - How much of current app configuration should be materialized versus left in
   native tool stores?
 - What should `reversible changes` mean precisely in Setpack terms:
@@ -106,6 +116,8 @@ Immediate documentation targets:
 5. define `reversible changes` well enough to either keep or replace the term
 6. decide which hybrid deployment and validation patterns are real design targets
    rather than speculative examples
+7. design script layering so higher-level pack scripts call narrower
+   app-specific or combination-specific scripts rather than absorbing all logic
 
 ## 6. Deferred
 
@@ -117,10 +129,10 @@ Immediate documentation targets:
 
 ## 7. Legacy Script Notes To Preserve Before Disposition
 
-The material under `scripts/` should not be treated as the active Setpack
-controller. It is a sketch tree with stale path assumptions and incomplete
-shell logic. The shell itself is a disposition candidate, but several design
-points are still worth preserving here before the directory is moved.
+The notes below refer to the earlier removed shell sketch tree, not to the
+current repo-local `scripts/` collection. That older shell was not an
+authoritative controller. It carried stale path assumptions and incomplete
+logic, but several design points were still worth preserving.
 
 ### 7.1 Intended Controller Boundaries
 
@@ -177,7 +189,7 @@ This remains especially relevant for Google-facing tools such as `gogcli` and
 
 ### 7.5 What Not To Preserve As Active Design
 
-The following parts of the old script tree should be treated as obsolete
+The following parts of the old removed script tree should be treated as obsolete
 implementation detail rather than something to repair in place:
 
 - line-oriented pseudo-TOML parsing
@@ -187,5 +199,5 @@ implementation detail rather than something to repair in place:
 
 ### 7.6 Later Disposition
 
-When the `scripts/` directory is moved or archived, preserve only these
-captured design points, not the old shell as current operational guidance.
+When referring back to that earlier shell work, preserve only these captured
+design points, not the old implementation as current operational guidance.

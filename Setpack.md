@@ -156,7 +156,44 @@ The current bootstrap chain is already concrete:
 This is not an accident in the design. It is the current operational surface
 that Setpack is trying to make explicit and manageable.
 
-### 4.4 Component Acquisition And Mixing
+### 4.4 Layered Controller Shape
+
+The controller shape should be separated into three layers.
+
+First is general set and pack setup. This layer is not about OpenClaw, Gog, or
+any other application. It is responsible for:
+
+- selecting the active set and pack
+- resolving `pack_root` and related pack paths
+- managing the shell block and pack env export
+- creating pack-level `bin/` directories and wrapper search precedence
+- recording pack status and validation receipts
+- providing generic import, export, and role-copy operations
+
+Second is application-specific component handling. This is where one app knows
+how to install, wrap, validate, or import its own material:
+
+- `openclaw`
+- `gog`
+- `himalaya`
+- `neverest`
+- later components with their own config, cred, and state rules
+
+Third is combination handling for cooperating applications. This layer is for
+cases where one managed app expects to call, discover, or coordinate with
+another:
+
+- OpenClaw plus helper tools it calls by executable name
+- OpenClaw plus `gog`
+- the `himalaya` and `neverest` subsystem
+- later multi-tool combinations that share paths, state, or wrapper behavior
+
+The intent is that higher-level scripts orchestrate lower-level ones. General
+set and pack setup should not hardcode app behavior. App-specific handlers
+should not own pack selection. Combination handlers should express cooperation
+rules without reimplementing the generic substrate.
+
+### 4.5 Component Acquisition And Mixing
 
 Setpack must support more than one way to obtain a working executable:
 
@@ -178,7 +215,7 @@ That is directly relevant to the current environment:
 - `himalaya` and `neverest` are still closer to current-system and local-build
   observations than fully formalized pack-local modules
 
-### 4.5 Working Style
+### 4.6 Working Style
 
 The approach is intentionally biased toward:
 
@@ -529,9 +566,10 @@ environment selector.
 
 - `Setpack.md`: architecture, design direction, and system-level comparisons
 - `Setplan.md`: active planning, unresolved design work, and near-term tasks
-- `apps/Setclaw.md`: OpenClaw-specific Setpack consequences
-- `apps/Setpimalaya.md`: Setpack-facing notes for the Himalaya and Neverest
-  subsystem
+- `apps/Setclaw.md`: OpenClaw-specific handling and OpenClaw-plus-helper
+  combination consequences
+- `apps/Setpimalaya.md`: Setpack-facing combination-layer notes for the
+  Himalaya and Neverest subsystem
 - `apps/ClawInfo.md`: sanitized observed OpenClaw environment inventory
 - `apps/ModelNames.md`: model, provider, profile, alias, and label naming notes
 - `apps/Neverest.md`: narrower Neverest-specific note while broader subsystem
@@ -541,6 +579,8 @@ environment selector.
 
 ### 9.2 Scripts
 
-- `setpack`: authoritative pack materialization and wrapper-generation entrypoint
-- `repack`: managed default-pack selector for `~/.setpack`
+- `setpack`: stable top-level orchestrator that calls the narrower scripts
+- `repack`: stable top-level wrapper for the managed-shell updater
+- `scripts/`: authoritative script collection, split into generic substrate,
+  application-specific handlers, and combination handlers
 - `dot.setpack`: template for the managed shell block consumed by `repack`

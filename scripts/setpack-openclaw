@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SETPACK_TAG="setpack-openclaw"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/lib/setpack-openclaw.sh"
+
+usage() {
+  cat <<'EOF'
+usage: scripts/setpack-openclaw <command>
+
+commands:
+  prepare   ensure openclaw layout
+  install   install the pinned openclaw bundle
+  wrap      rewrite the pack-local openclaw wrapper
+  validate  validate the openclaw bundle, wrapper, and config
+EOF
+}
+
+main() {
+  setpack_pack_load_context
+  setpack_openclaw_load_context
+  case "${1:-}" in
+    prepare)
+      setpack_openclaw_ensure_layout
+      ;;
+    install)
+      setpack_openclaw_install_bundle
+      ;;
+    wrap)
+      setpack_openclaw_ensure_layout
+      setpack_openclaw_write_wrapper
+      ;;
+    validate)
+      setpack_openclaw_validate
+      ;;
+    ""|-h|--help|help)
+      usage
+      ;;
+    *)
+      usage
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"
