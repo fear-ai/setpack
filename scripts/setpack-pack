@@ -29,15 +29,35 @@ main() {
       setpack_pack_write_env
       ;;
     import)
-      local role="${2:-}"
-      local component="${3:-}"
-      local src_set="${4:-}"
-      local src_pack="${5:-}"
-      [ -n "$role" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      [ -n "$component" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      [ -n "$src_set" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      [ -n "$src_pack" ] || setpack_die "usage: scripts/setpack-pack import <conf|cred|state|workspace> <component> <src-set> <src-pack>"
-      setpack_pack_import_component_role "$role" "$component" "$src_set" "$src_pack"
+      local force="no"
+      shift
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          -f|--force)
+            force="yes"
+            shift
+            ;;
+          --)
+            shift
+            break
+            ;;
+          -*)
+            setpack_die "usage: scripts/setpack-pack import [-f] <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+            ;;
+          *)
+            break
+            ;;
+        esac
+      done
+      local role="${1:-}"
+      local component="${2:-}"
+      local src_set="${3:-}"
+      local src_pack="${4:-}"
+      [ -n "$role" ] || setpack_die "usage: scripts/setpack-pack import [-f] <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      [ -n "$component" ] || setpack_die "usage: scripts/setpack-pack import [-f] <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      [ -n "$src_set" ] || setpack_die "usage: scripts/setpack-pack import [-f] <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      [ -n "$src_pack" ] || setpack_die "usage: scripts/setpack-pack import [-f] <conf|cred|state|workspace> <component> <src-set> <src-pack>"
+      setpack_pack_import_component_role "$role" "$component" "$src_set" "$src_pack" "$force"
       ;;
     status)
       setpack_pack_show_status

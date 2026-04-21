@@ -123,15 +123,25 @@ setpack_pack_clear_dir() {
   find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 }
 
+setpack_pack_dir_has_contents() {
+  local dir="$1"
+  [ -d "$dir" ] || return 1
+  find "$dir" -mindepth 1 -maxdepth 1 -print -quit | grep -q .
+}
+
 setpack_pack_copy_dir_contents() {
   local src="$1"
   local dst="$2"
+  local force="${3:-no}"
 
   [ -d "$src" ] || setpack_die "missing source dir: $src"
+  if setpack_pack_dir_has_contents "$dst"; then
+    [ "$force" = "yes" ] || setpack_die "destination is not empty: $dst (rerun import with -f to replace)"
+  fi
   mkdir -p "$dst"
 
   if command -v rsync >/dev/null 2>&1; then
-    rsync -a --delete --exclude='.git' "$src"/ "$dst"/
+    rsync -a --checksum --delete --exclude='.git' "$src"/ "$dst"/
     return 0
   fi
 
@@ -158,6 +168,7 @@ setpack_pack_import_component_role() {
   local component="$2"
   local src_set="$3"
   local src_pack="$4"
+  local force="${5:-no}"
   local src_root src_path dst_path status_key
 
   src_root="$SETPACK_ROOT/$src_set/$src_pack"
@@ -187,7 +198,7 @@ setpack_pack_import_component_role() {
   esac
 
   setpack_log "import $role for $component from $src_set/$src_pack"
-  setpack_pack_copy_dir_contents "$src_path" "$dst_path"
+  setpack_pack_copy_dir_contents "$src_path" "$dst_path" "$force"
   setpack_pack_status_mark "subsystem.$component.$status_key" "imported"
   setpack_pack_status_set "subsystem.$component.$status_key.source_pack" "$src_set/$src_pack"
 }

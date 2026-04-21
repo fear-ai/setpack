@@ -53,7 +53,7 @@ top-level commands:
   wrap             rewrite pack env plus openclaw and gog wrappers
   install-openclaw prepare openclaw layout and install the pinned openclaw bundle
   install-gog      prepare gog layout, duplicate the current gog binary, and rewrite the gog wrapper
-  import           import conf|cred|state|workspace for a component from another pack
+  import           import conf|cred|state|workspace for a component from another pack (-f to replace non-empty destination)
   status           print status.toml
   cred-plan        print credential setup approaches
 
