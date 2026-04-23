@@ -1,13 +1,47 @@
 typeset -U path PATH
 
 # >>> setpack defaults >>>
-export SETPACK_ROOT="${SETPACK_ROOT:-$HOME/Setpacks}"
-export SETPACK_SET="${SETPACK_SET:-set1}"
-export SETPACK_PACK="${SETPACK_PACK:-pack1}"
+# Managed selection must override inherited shell state. Old terminals and tool
+# hosts can carry stale SETPACK_* values; we clear them first so a new default
+# pack selection actually takes effect.
+_setpack_prev_root="${SETPACK_ROOT:-}"
+_setpack_prev_set="${SETPACK_SET:-}"
+_setpack_prev_pack="${SETPACK_PACK:-}"
+_setpack_prev_pack_root="${SETPACK_PACK_ROOT:-}"
+_setpack_prev_pack_bin="${SETPACK_PACK_BIN:-}"
+_setpack_prev_status_file="${SETPACK_STATUS_FILE:-}"
+
+unset SETPACK_ROOT SETPACK_SET SETPACK_PACK SETPACK_PACK_ROOT SETPACK_PACK_BIN SETPACK_STATUS_FILE
+
+export SETPACK_ROOT="$HOME/Setpacks"
+export SETPACK_SET="set1"
+export SETPACK_PACK="pack1"
 # <<< setpack defaults <<<
 
 _setpack_pack_root="$SETPACK_ROOT/$SETPACK_SET/$SETPACK_PACK"
 _setpack_pack_env="$_setpack_pack_root/.setpack.pack.sh"
+
+if [[ -n "$_setpack_prev_pack_bin" ]]; then
+  path=(${path:#$_setpack_prev_pack_bin})
+fi
+
+if [[ -n "$_setpack_prev_root" ]]; then
+  path=(${path:#$_setpack_prev_root/bin})
+fi
+
+# Remove all setpack-controlled bin entries under the selected root, then add
+# the current root/bin and pack/bin back in a deterministic order.
+typeset -a _setpack_clean_path
+for _setpack_path_entry in "${path[@]}"; do
+  case "$_setpack_path_entry" in
+    "$SETPACK_ROOT"/bin|"$SETPACK_ROOT"/*/*/bin)
+      continue
+      ;;
+  esac
+  _setpack_clean_path+=("$_setpack_path_entry")
+done
+path=("${_setpack_clean_path[@]}")
+unset _setpack_clean_path _setpack_path_entry
 
 [[ -f "$_setpack_pack_env" ]] && . "$_setpack_pack_env"
 
@@ -26,3 +60,5 @@ else
 fi
 
 unset _setpack_pack_root _setpack_pack_env _setpack_bin_root
+unset _setpack_prev_root _setpack_prev_set _setpack_prev_pack _setpack_prev_pack_root
+unset _setpack_prev_pack_bin _setpack_prev_status_file

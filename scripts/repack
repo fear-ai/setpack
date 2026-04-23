@@ -8,9 +8,9 @@ TEMPLATE_FILE="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)/dot.setpack"
 
 usage() {
   cat <<'EOF'
-usage: repack [--dry] [-f] [--file <path>] <pack>
-       repack [--dry] [-f] [--file <path>] <set> <pack>
-       repack [--dry] [-f] [--file <path>] <root_path> <set> <pack>
+usage: repack [--dry] [-f|--force] [--file <path>] <pack>
+       repack [--dry] [-f|--force] [--file <path>] <set> <pack>
+       repack [--dry] [-f|--force] [--file <path>] <root_path> <set> <pack>
 
 Update the default Setpack shell selection in the managed block.
 
@@ -22,6 +22,7 @@ Argument forms:
 Behavior:
   - writes by default
   - --dry previews only
+  - -f/--force stops setpack-managed processes and the OpenClaw LaunchAgent first
   - existing target with managed block: update block only
   - missing target: create from template
   - existing target without managed block: refuse unless -f, then replace from template
@@ -35,6 +36,85 @@ log() {
 die() {
   printf '[repack] error: %s\n' "$*" >&2
   exit 1
+}
+
+bootout_openclaw_launchagent() {
+  local label="ai.openclaw.gateway"
+  local gui_target plist
+
+  command -v launchctl >/dev/null 2>&1 || return 0
+  gui_target="gui/$(id -u)"
+  plist="$HOME/Library/LaunchAgents/$label.plist"
+
+  launchctl bootout "$gui_target" "$plist" >/dev/null 2>&1 || true
+  launchctl bootout "$gui_target/$label" >/dev/null 2>&1 || true
+  launchctl unload "$plist" >/dev/null 2>&1 || true
+}
+
+collect_setpack_processes() {
+  local root_path="$1"
+  local self_pid parent_pid
+
+  self_pid="$$"
+  parent_pid="$PPID"
+
+  ps -axo pid=,ppid=,command= | awk \
+    -v root="$root_path/" \
+    -v self_pid="$self_pid" \
+    -v parent_pid="$parent_pid" '
+      index($0, root) == 0 { next }
+      {
+        pid = $1
+        ppid = $2
+        if (pid == self_pid || pid == parent_pid) {
+          next
+        }
+        print pid
+      }
+    ' | sort -u
+}
+
+terminate_process_list() {
+  local signal="$1"
+  shift || true
+  [ $# -gt 0 ] || return 0
+  kill "-$signal" "$@" >/dev/null 2>&1 || true
+}
+
+force_reset_runtime() {
+  local root_path="$1"
+  local pids=() remaining=()
+  local pid
+
+  # --force is the explicit "make the switch predictable now" path. It tears
+  # down setpack-managed runtime state before rewriting the default pack.
+  log "force: stopping OpenClaw LaunchAgent"
+  bootout_openclaw_launchagent
+
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    pids+=("$pid")
+  done < <(collect_setpack_processes "$root_path")
+
+  if [ "${#pids[@]}" -eq 0 ]; then
+    log "force: no running processes found under $root_path"
+    return 0
+  fi
+
+  log "force: terminating setpack-managed processes under $root_path: ${pids[*]}"
+  terminate_process_list TERM "${pids[@]}"
+  sleep 1
+
+  for pid in "${pids[@]}"; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      remaining+=("$pid")
+    fi
+  done
+
+  if [ "${#remaining[@]}" -gt 0 ]; then
+    log "force: killing remaining processes: ${remaining[*]}"
+    terminate_process_list KILL "${remaining[@]}"
+  fi
 }
 
 has_managed_block() {
@@ -51,6 +131,13 @@ extract_managed_value() {
       line = $0
       sub("^export " name "=\"\\$\\{" name ":-", "", line)
       sub("\\}\"$", "", line)
+      print line
+      exit
+    }
+    index($0, "export " name "=\"") == 1 {
+      line = $0
+      sub("^export " name "=\"", "", line)
+      sub("\"$", "", line)
       print line
       exit
     }
@@ -71,9 +158,18 @@ replace_managed_block() {
     -v pack_name="$pack_name" '
       function print_block() {
         print begin
-        print "export SETPACK_ROOT=\"${SETPACK_ROOT:-" root_path "}\""
-        print "export SETPACK_SET=\"${SETPACK_SET:-" set_name "}\""
-        print "export SETPACK_PACK=\"${SETPACK_PACK:-" pack_name "}\""
+        print "_setpack_prev_root=\"${SETPACK_ROOT:-}\""
+        print "_setpack_prev_set=\"${SETPACK_SET:-}\""
+        print "_setpack_prev_pack=\"${SETPACK_PACK:-}\""
+        print "_setpack_prev_pack_root=\"${SETPACK_PACK_ROOT:-}\""
+        print "_setpack_prev_pack_bin=\"${SETPACK_PACK_BIN:-}\""
+        print "_setpack_prev_status_file=\"${SETPACK_STATUS_FILE:-}\""
+        print ""
+        print "unset SETPACK_ROOT SETPACK_SET SETPACK_PACK SETPACK_PACK_ROOT SETPACK_PACK_BIN SETPACK_STATUS_FILE"
+        print ""
+        print "export SETPACK_ROOT=\"" root_path "\""
+        print "export SETPACK_SET=\"" set_name "\""
+        print "export SETPACK_PACK=\"" pack_name "\""
         print end
       }
       BEGIN {
@@ -115,7 +211,7 @@ while [ $# -gt 0 ]; do
       dry_run="yes"
       shift
       ;;
-    -f)
+    -f|--force)
       force_replace="yes"
       shift
       ;;
@@ -201,10 +297,17 @@ log "set         : $set_name"
 log "pack        : $pack_name"
 
 if [ "$dry_run" = "yes" ]; then
+  if [ "$force_replace" = "yes" ]; then
+    log "dry-run force: would stop OpenClaw LaunchAgent and terminate processes under $root_path"
+  fi
   log "dry-run only; rerun without --dry to write changes"
   printf '%s\n' "--- $target_file (proposed) ---"
   cat "$tmp"
   exit 0
+fi
+
+if [ "$force_replace" = "yes" ]; then
+  force_reset_runtime "$root_path"
 fi
 
 if [ -f "$target_file" ] && [ "$source_mode" = "template-forced" ]; then

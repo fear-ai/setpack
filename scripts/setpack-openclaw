@@ -14,11 +14,13 @@ commands:
   install   install the pinned openclaw bundle
   wrap      rewrite the pack-local openclaw wrapper
   configure create pack-local openclaw config, seed workspace docs, and wire cred/state links
+  import-claude-auth [-f]  import Claude CLI native credentials into pack-local cred storage
   validate  validate the openclaw bundle, wrapper, and config
 EOF
 }
 
 main() {
+  local force
   setpack_pack_load_context
   setpack_openclaw_load_context
   case "${1:-}" in
@@ -35,6 +37,19 @@ main() {
     configure)
       setpack_openclaw_ensure_layout
       setpack_openclaw_configure
+      ;;
+    import-claude-auth)
+      shift
+      force=0
+      case "${1:-}" in
+        -f|--force)
+          force=1
+          shift
+          ;;
+      esac
+      [ "$#" -eq 0 ] || setpack_die "usage: scripts/setpack-openclaw import-claude-auth [-f]"
+      setpack_openclaw_ensure_layout
+      setpack_openclaw_import_claude_auth "$force"
       ;;
     validate)
       setpack_openclaw_validate

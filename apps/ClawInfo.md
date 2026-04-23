@@ -71,13 +71,16 @@ The sections below are organized by current source location and current runtime 
 
 ### 3.4 Discord Channel Config
 
-- `channels.discord.enabled`: `false`
+- `channels.discord.enabled`: `true`
 - `channels.discord.token`: present in local config, redacted here
 - `channels.discord.groupPolicy`: `allowlist`
 - configured guild policy:
   - guild `473805904957931522`
-  - `requireMention=true`
-  - allowed channel `852540676259184670`
+  - `requireMention=false`
+  - `473820999171702784`: `allow=false` (`#zero-general`, kept disabled in config)
+  - `566973676608552972`: `allow=true` (`#zero-tip`)
+  - `1404621978500862023`: `allow=true` (`#zero-games`)
+  - `852540676259184670`: `allow=true`
 - `channels.discord.streaming`: `off`
 
 ### 3.5 Gateway
@@ -686,3 +689,50 @@ Interpretation:
 - concrete OpenClaw-environment application and module status belong here in `ClawInfo.md`
 - narrower module-specific work notes can live in repo-local app notes such as
   `apps/Neverest.md`
+
+### 10.10 Current `apr20` OpenClaw Snapshot
+
+The active pack under current validation is now `apr20`, not `today`.
+
+Current command resolution observed from the working shell:
+
+- `openclaw` resolves to:
+  - `/Users/walter/Work/Claw/Setpacks/openclaw/apr20/bin/openclaw`
+
+Current primary OpenClaw pack paths:
+
+- config:
+  - `/Users/walter/Work/Claw/Setpacks/openclaw/apr20/openclaw/config/openclaw.json`
+- state:
+  - `/Users/walter/Work/Claw/Setpacks/openclaw/apr20/openclaw/state`
+- workspace:
+  - `/Users/walter/Work/Claw/Setpacks/openclaw/apr20/openclaw/workspace`
+- credentials:
+  - `/Users/walter/Work/Claw/Setpacks/openclaw/apr20/openclaw/cred`
+
+Current gateway and channel observations:
+
+- gateway runs from the `apr20` pack-local OpenClaw bundle
+- the LaunchAgent has previously been observed running stale pack paths; this
+  is why `repack --force` now tears down pack-managed runtime processes
+- the local CLI/backend device needed a scope-upgrade approval before privileged
+  gateway calls stopped failing with `pairing required`
+- the Control UI may need a browser page reload after token or pairing changes
+- Discord currently probes as connected under bot/app identity `Diss`
+- Discord channel policy is currently explicit per-channel config under guild
+  `473805904957931522`
+- Slack currently probes as connected in socket mode, but explicit Slack
+  channel allowlist entries are still missing
+- Telegram currently probes as connected in polling mode as `@WaKaTeleBot`
+- Telegram user `391409685` is allowlisted, but no Telegram group id has yet
+  been captured or configured
+
+Current OpenClaw workspace persona observation:
+
+- `workspace/IDENTITY.md` names the assistant `Nova`
+- `workspace/TOOLS.md` includes a sample preferred voice named `Nova`
+- when Discord replies sign as `Nova`, the source is this workspace bootstrap
+  material, not a Discord bot-name change
+
+This section is inventory only. OpenClaw-specific interpretation and follow-up
+tasks belong in `apps/Setclaw.md` and `Setplan.md`.

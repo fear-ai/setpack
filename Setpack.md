@@ -156,6 +156,23 @@ The current bootstrap chain is already concrete:
 This is not an accident in the design. It is the current operational surface
 that Setpack is trying to make explicit and manageable.
 
+One operational lesson now needs to remain attached to that chain. A managed
+shell selector that only sets values when variables are unset is not strong
+enough for this project. Long-lived terminals, tool hosts, and helper
+processes can carry stale `SETPACK_*` variables and stale setpack `PATH`
+entries forward even after the user has selected a new default pack. The
+managed shell block and generated `.setpack.pack.sh` files therefore clear
+prior setpack selector variables and scrub old setpack path entries before
+setting the new pack authoritatively.
+
+The same logic justifies a distinct forced mode on `repack`. Ordinary `repack`
+changes what future shells and future launches resolve. `repack --force`
+exists for the developer case where predictability matters more than preserving
+already-running pack-managed processes. In that explicit mode, Setpack tears
+down the OpenClaw LaunchAgent and pack-root processes before rewriting the
+managed default selection so that old runtime state does not keep operating
+under the previous pack unnoticed.
+
 ### 4.4 Layered Controller Shape
 
 The controller shape should be separated into three layers.
@@ -338,6 +355,9 @@ Setpack should absorb rather than ignore:
 - repo-root `setpack` is the authoritative materialization script
 - repo-root `repack` updates the managed default-pack selection block in
   `~/.setpack`
+- repo-root `repack --force` is the explicit teardown path when the developer
+  wants stale gateways, wrappers, and pack-managed processes cleared before the
+  new default selection is written
 - `.setpack.pack.sh` reflects resolved pack variables back into interactive
   shells
 - Gog validation currently relies on a controlled `HOME` and a synthetic

@@ -153,12 +153,16 @@ setpack_pack_copy_dir_contents() {
 setpack_pack_write_env() {
   setpack_log "write pack env"
   cat > "$PACK_ENV_FILE" <<EOF
-export SETPACK_ROOT="\${SETPACK_ROOT:-$SETPACK_ROOT}"
-export SETPACK_SET="\${SETPACK_SET:-$SET_NAME}"
-export SETPACK_PACK="\${SETPACK_PACK:-$PACK_NAME}"
-export SETPACK_PACK_ROOT="\${SETPACK_PACK_ROOT:-$PACK_ROOT}"
-export SETPACK_PACK_BIN="\${SETPACK_PACK_BIN:-$PACK_BIN_DIR}"
-export SETPACK_STATUS_FILE="\${SETPACK_STATUS_FILE:-$STATUS_FILE}"
+# Pack env files are authoritative. They must override inherited selector
+# variables so new shells and tool hosts do not stay pinned to an older pack.
+unset SETPACK_ROOT SETPACK_SET SETPACK_PACK SETPACK_PACK_ROOT SETPACK_PACK_BIN SETPACK_STATUS_FILE
+
+export SETPACK_ROOT="$SETPACK_ROOT"
+export SETPACK_SET="$SET_NAME"
+export SETPACK_PACK="$PACK_NAME"
+export SETPACK_PACK_ROOT="$PACK_ROOT"
+export SETPACK_PACK_BIN="$PACK_BIN_DIR"
+export SETPACK_STATUS_FILE="$STATUS_FILE"
 EOF
   setpack_pack_status_mark "subsystem.pack.env" "completed"
 }
